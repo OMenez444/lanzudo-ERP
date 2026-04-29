@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Guest": {
+      "title": "Guest",
+      "description": "Guest profile and loyalty information",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "documentId": { "type": "string" },
+        "loyaltyPoints": { "type": "integer" }
+      },
+      "required": ["fullName"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Hotel room physical unit",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string", "enum": ["AVAILABLE", "OCCUPIED", "CLEANING", "MAINTENANCE"] },
+        "price": { "type": "integer" },
+        "guestId": { "type": "string" },
+        "guestName": { "type": "string" }
+      },
+      "required": ["number", "type", "status", "price"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Room reservation record",
+      "type": "object",
+      "properties": {
+        "checkIn": { "type": "string", "format": "date-time" },
+        "checkOut": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"] },
+        "totalPrice": { "type": "integer" },
+        "guestId": { "type": "string" },
+        "roomId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paymentMethod": { "type": "string", "enum": ["DINHEIRO", "PIX", "DEBITO", "CREDITO"] },
+        "finalTotal": { "type": "integer" },
+        "discount": { "type": "integer" },
+        "checkedOutAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["guestId", "roomId", "checkIn", "checkOut"]
+    },
+    "Experience": {
+      "title": "Experience",
+      "description": "Service or activity available for booking",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "integer" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    }
+  },
+  "firestore": {
+    "/guests/{guestId}": {
+      "schema": "Guest",
+      "description": "Collection of guests"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Collection of rooms"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Collection of reservations"
+    },
+    "/experiences/{experienceId}": {
+      "schema": "Experience",
+      "description": "Catalogue of experiences"
+    }
+  }
+}
