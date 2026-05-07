@@ -21,6 +21,8 @@ interface BookingModalProps {
     roomId: string;
     guestsCount: number;
     discount: number;
+    source: 'DIRECT' | 'AIRBNB' | 'BOOKING';
+    customPricePerNight?: number;
   }) => void;
 }
 
@@ -32,16 +34,26 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   guests,
   onConfirm 
 }) => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    guestName: string;
+    checkIn: string;
+    checkOut: string;
+    roomId: string;
+    guestsCount: number;
+    discount: number;
+    source: 'DIRECT' | 'AIRBNB' | 'BOOKING';
+    customPricePerNight?: number;
+  }>({
     guestName: '',
     checkIn: '',
     checkOut: '',
     roomId: selectedRoomId || rooms[0]?.id || '',
     guestsCount: 1,
     discount: 0,
+    source: 'DIRECT',
+    customPricePerNight: 0,
   });
 
-  const selectedRoom = rooms.find(r => r.id === formData.roomId);
   const nights = formData.checkIn && formData.checkOut 
     ? Math.max(0, Math.ceil((new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
@@ -49,7 +61,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   // Pricing rules: 1=139, 2=189, 3=279
   let pricePerNight = 139;
   if (formData.guestsCount === 2) pricePerNight = 189;
-  if (formData.guestsCount >= 3) pricePerNight = 279;
+  if (formData.guestsCount === 3) pricePerNight = 279;
+  if (formData.guestsCount >= 4 || formData.source === 'AIRBNB') {
+    pricePerNight = formData.customPricePerNight || 0;
+  }
   
   const totalPrice = Math.max(0, (pricePerNight * nights) - formData.discount);
 
@@ -143,11 +158,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <input 
                     type="number" 
                     min="1"
-                    max={selectedRoom?.bedType === '1_CASAL_1_SOLTEIRO' ? 3 : 2}
+                    max="4"
                     placeholder="Quantidade de Hóspedes" 
                     className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white"
                     value={formData.guestsCount}
-                    onChange={(e) => setFormData({ ...formData, guestsCount: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, guestsCount: Math.min(4, Math.max(1, parseInt(e.target.value) || 1)) })}
                     required
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-black uppercase">Hóspedes</span>
@@ -155,19 +170,33 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
 
               {/* Room & Experience Selection */}
-              <div className="space-y-4">
-                <label className="text-[10px] uppercase text-slate-500 font-black tracking-widest px-1">Selecione a Unidade</label>
-                <select 
-                  value={formData.roomId}
-                  onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                  className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white appearance-none"
-                >
-                  {rooms.map(room => (
-                    <option key={room.id} value={room.id} className="bg-brand-slate">
-                      {room.number} - {room.type}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase text-slate-500 font-black tracking-widest px-1">Unidade</label>
+                  <select 
+                    value={formData.roomId}
+                    onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white appearance-none"
+                  >
+                    {rooms.map(room => (
+                      <option key={room.id} value={room.id} className="bg-brand-slate">
+                        {room.number} - {room.type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase text-slate-500 font-black tracking-widest px-1">Origem (Plataforma)</label>
+                  <select 
+                    value={formData.source}
+                    onChange={(e) => setFormData({ ...formData, source: e.target.value as 'DIRECT' | 'AIRBNB' | 'BOOKING' })}
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white appearance-none"
+                  >
+                    <option value="DIRECT" className="bg-brand-slate">Direta (Recepção/Whats)</option>
+                    <option value="AIRBNB" className="bg-brand-slate">Airbnb</option>
+                    <option value="BOOKING" className="bg-brand-slate">Booking.com</option>
+                  </select>
+                </div>
               </div>
 
               <div className="bg-brand-gold/5 border border-brand-gold/10 rounded-2xl p-6">
@@ -175,22 +204,68 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <Star className="text-brand-gold" size={20} />
                   <span className="text-sm font-bold text-brand-cream uppercase tracking-tight">Tarifário Dinâmico</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 1 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
-                    <p className="text-[8px] font-black uppercase">1 Pessoa</p>
-                    <p className="text-xs font-mono">139,00</p>
+                
+                {formData.source === 'AIRBNB' ? (
+                  <div className="bg-brand-gold/10 p-4 rounded-xl border border-brand-gold/20 mb-4">
+                    <p className="text-brand-gold text-xs font-bold uppercase tracking-tight mb-2">Reserva via Airbnb</p>
+                    <p className="text-slate-400 text-[10px] leading-relaxed mb-4">
+                      Para reservas do Airbnb, a plataforma já gerencia o pagamento das diárias. 
+                      Insira abaixo o valor líquido repassado (opcional). Os consumos locais serão cobrados à parte no check-out.
+                    </p>
+                    <div className="flex items-center gap-3 bg-white/5 rounded-2xl p-4 border border-white/5">
+                      <span className="text-slate-500 text-sm font-mono">R$</span>
+                      <input 
+                        type="number"
+                        value={formData.customPricePerNight || ''}
+                        onChange={(e) => setFormData({ ...formData, customPricePerNight: Number(e.target.value) })}
+                        placeholder="Valor por Diária Repassado (0,00)"
+                        className="bg-transparent text-brand-cream font-serif text-xl outline-none w-full"
+                      />
+                    </div>
                   </div>
-                  <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 2 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
-                    <p className="text-[8px] font-black uppercase">2 Pessoas</p>
-                    <p className="text-xs font-mono">189,00</p>
-                  </div>
-                  <div className={`p-2 rounded-xl text-center border ${formData.guestsCount >= 3 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
-                    <p className="text-[8px] font-black uppercase">3 Pessoas</p>
-                    <p className="text-xs font-mono">279,00</p>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 1 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
+                        <p className="text-[8px] font-black uppercase">1 Pessoa</p>
+                        <p className="text-xs font-mono">139,00</p>
+                      </div>
+                      <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 2 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
+                        <p className="text-[8px] font-black uppercase">2 Pessoas</p>
+                        <p className="text-xs font-mono">189,00</p>
+                      </div>
+                      <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 3 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
+                        <p className="text-[8px] font-black uppercase">3 Pessoas</p>
+                        <p className="text-xs font-mono">279,00</p>
+                      </div>
+                      <div className={`p-2 rounded-xl text-center border ${formData.guestsCount >= 4 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
+                        <p className="text-[8px] font-black uppercase">4 Pessoas</p>
+                        <p className="text-xs font-mono">A combinar</p>
+                      </div>
+                    </div>
 
-                <div className="mt-6 pt-6 border-t border-brand-gold/10">
+                    {formData.guestsCount >= 4 && (
+                      <div className="mt-4 pt-4 border-t border-brand-gold/10">
+                        <div className="flex justify-between items-center text-[10px] uppercase tracking-widest px-1 mb-2">
+                          <span className="text-brand-gold font-black">Valor da Diária Personalizado (4 Hóspedes)</span>
+                        </div>
+                        <div className="flex items-center gap-3 bg-white/5 rounded-2xl p-4 border border-white/5">
+                          <span className="text-slate-500 text-sm font-mono">R$</span>
+                          <input 
+                            type="number"
+                            value={formData.customPricePerNight || ''}
+                            onChange={(e) => setFormData({ ...formData, customPricePerNight: Number(e.target.value) })}
+                            placeholder="0,00"
+                            className="bg-transparent text-brand-cream font-serif text-xl outline-none w-full"
+                          />
+                        </div>
+                        <p className="text-[9px] text-slate-600 mt-2 italic">* O valor informado será multiplicado pelo total de noites.</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="mt-4 pt-4 border-t border-brand-gold/10">
                   <div className="flex justify-between items-center text-[10px] uppercase tracking-widest px-1 mb-2">
                     <span className="text-brand-gold font-black">Desconto Personalizado</span>
                   </div>

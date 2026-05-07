@@ -57,6 +57,7 @@ export interface Booking {
   roomId: string;
   checkIn: string;
   checkOut: string;
+  source?: 'DIRECT' | 'AIRBNB' | 'BOOKING';
   status: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
   totalPrice: number;
   guestsCount?: number;
@@ -64,4 +65,5 @@ export interface Booking {
   paymentMethod?: PaymentMethod;
   finalTotal?: number;
   discount?: number;
+  checkedOutAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }

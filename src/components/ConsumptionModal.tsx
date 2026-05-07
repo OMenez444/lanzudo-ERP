@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Minus, ShoppingBag, CreditCard, History, User } from 'lucide-react';
+import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2 } from 'lucide-react';
 import { Booking, Product } from '../types';
+import { formatDisplayDate } from '../lib/dateUtils';
 
 interface ConsumptionModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface ConsumptionModalProps {
   booking: Booking | null;
   products: Product[];
   onAddConsumption: (bookingId: string, product: Product, quantity: number) => Promise<void>;
+  onRemoveConsumption: (bookingId: string, consumptionId: string) => Promise<void>;
   onCheckOut: (roomId: string) => Promise<void>;
 }
 
@@ -23,6 +25,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   booking, 
   products,
   onAddConsumption,
+  onRemoveConsumption,
   onCheckOut
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -159,11 +162,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 uppercase tracking-tighter">Check-in</span>
-                    <span className="text-slate-300 font-mono">{new Date(booking.checkIn).toLocaleDateString('pt-BR')}</span>
+                    <span className="text-slate-300 font-mono">{formatDisplayDate(booking.checkIn)}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 uppercase tracking-tighter">Check-out Previsto</span>
-                    <span className="text-slate-300 font-mono">{new Date(booking.checkOut).toLocaleDateString('pt-BR')}</span>
+                    <span className="text-slate-300 font-mono">{formatDisplayDate(booking.checkOut)}</span>
                   </div>
                 </div>
               </div>
@@ -190,7 +193,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 </div>
               ) : (
                 booking.consumptions.map((item) => (
-                  <div key={item.id} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center group relative border border-transparent hover:border-brand-gold/10 transition-all">
+                  <div key={item.id} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center group relative border border-transparent hover:border-brand-gold/10 transition-all pr-12">
                     <div>
                       <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tight">{item.productName}</p>
                       <p className="text-[10px] text-slate-500 font-mono">
@@ -203,6 +206,13 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       </p>
                       <p className="text-[8px] text-slate-600 uppercase font-black">Lançado agora</p>
                     </div>
+                    <button
+                      onClick={() => onRemoveConsumption(booking.id, item.id)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-red-500/50 hover:bg-red-500/10 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remover Item"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 ))
               )}

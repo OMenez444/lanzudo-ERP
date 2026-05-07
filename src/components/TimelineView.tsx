@@ -7,6 +7,7 @@ import React from 'react';
 import { Room, Booking } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, ShoppingBag } from 'lucide-react';
+import { getLocalDateString } from '../lib/dateUtils';
 
 interface TimelineViewProps {
   rooms: Room[];
@@ -86,7 +87,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ rooms, bookings, onA
                 // Verificar se existe uma reserva para esta unidade e data
                 const dateAtCell = new Date();
                 dateAtCell.setDate(dateAtCell.getDate() + i);
-                const dateStr = dateAtCell.toISOString().split('T')[0];
+                const dateStr = getLocalDateString(dateAtCell);
 
                 const activeBooking = bookings.find(b => 
                   b.roomId === room.id && 

@@ -28,7 +28,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!isOpen || !booking) return null;
 
-  const stayTotal = Number(booking.totalPrice) || 0;
+  const isAirbnb = booking.source === 'AIRBNB';
+  const stayTotal = isAirbnb ? 0 : (Number(booking.totalPrice) || 0);
+  const repasseAirbnb = isAirbnb ? (Number(booking.totalPrice) || 0) : 0;
+  
   const consumptionsTotal = booking.consumptions?.reduce((acc, curr) => {
     return acc + (Number(curr.price) * Number(curr.quantity));
   }, 0) || 0;
@@ -98,10 +101,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
 
               <div className="space-y-3 py-6 border-y border-white/5">
-                <div className="flex justify-between text-xs uppercase tracking-widest">
-                  <span className="text-slate-500 font-bold">Total Diárias</span>
-                  <span className="text-slate-300 font-mono italic">R$ {stayTotal.toLocaleString('pt-BR')},00</span>
-                </div>
+                {isAirbnb ? (
+                  <div className="flex justify-between text-xs uppercase tracking-widest">
+                    <span className="text-slate-500 font-bold">Total Diárias (Airbnb)</span>
+                    <span className="text-brand-gold font-mono italic">Já Pago (Repasse: R$ {repasseAirbnb.toLocaleString('pt-BR')},00)</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-xs uppercase tracking-widest">
+                    <span className="text-slate-500 font-bold">Total Diárias</span>
+                    <span className="text-slate-300 font-mono italic">R$ {stayTotal.toLocaleString('pt-BR')},00</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs uppercase tracking-widest">
                   <span className="text-slate-500 font-bold">Total Consumo</span>
                   <span className="text-slate-300 font-mono italic">R$ {consumptionsTotal.toLocaleString('pt-BR')},00</span>

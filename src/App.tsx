@@ -7,7 +7,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Plus, 
-  Bell, 
   ShoppingBag,
   LogIn,
   LogOut,
@@ -39,6 +38,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType, auth, signInWithGoogle } from './lib/firebase';
+import { getLocalDateString } from './lib/dateUtils';
 
 export default function App() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -143,7 +143,7 @@ export default function App() {
   const occupiedRooms = rooms.filter(r => r.status === 'OCCUPIED').length;
   const checkinsToday = bookings.filter(b => {
     if (b.status !== 'CONFIRMED' || !b.checkIn) return false;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     return b.checkIn === today;
   }).length;
 
@@ -296,6 +296,21 @@ export default function App() {
     }
   };
 
+  const handleRemoveConsumption = async (bookingId: string, consumptionId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    const updatedConsumptions = (booking.consumptions || []).filter(c => c.id !== consumptionId);
+
+    try {
+      await updateDoc(doc(db, 'bookings', bookingId), {
+        consumptions: updatedConsumptions
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
   const handleConfirmBooking = async (data: {
     guestName: string;
     roomId: string;
@@ -303,12 +318,19 @@ export default function App() {
     checkOut: string;
     guestsCount: number;
     discount: number;
+    source: 'DIRECT' | 'AIRBNB' | 'BOOKING';
+    customPricePerNight?: number;
   }) => {
     try {
       // Pricing rules: 1=139, 2=189, 3=279
       let pricePerNight = 139;
       if (data.guestsCount === 2) pricePerNight = 189;
-      if (data.guestsCount >= 3) pricePerNight = 279;
+      if (data.guestsCount === 3) pricePerNight = 279;
+      if ((data.guestsCount >= 4 || data.source === 'AIRBNB') && data.customPricePerNight !== undefined) {
+        pricePerNight = data.customPricePerNight;
+      } else if (data.guestsCount >= 4) {
+        pricePerNight = 279;
+      }
 
       const nights = Math.max(1, Math.ceil((new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
       const discount = data.discount || 0;
@@ -326,6 +348,7 @@ export default function App() {
         status: 'CONFIRMED',
         totalPrice: Math.max(0, totalPrice),
         discount: discount,
+        source: data.source,
         createdAt: serverTimestamp()
       });
 
@@ -427,10 +450,6 @@ export default function App() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <button className="p-3 bg-brand-slate border border-white/5 rounded-full text-slate-400 hover:text-brand-gold relative transition-all">
-              <Bell size={20} />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-brand-gold rounded-full"></span>
-            </button>
             <div className="p-1 px-3 bg-brand-slate border border-white/5 rounded-full flex items-center gap-2 group relative">
               {user?.photoURL ? (
                 <img src={user.photoURL} alt={user.displayName || ''} className="w-8 h-8 rounded-full border border-brand-gold/20" />
@@ -719,7 +738,7 @@ export default function App() {
               </div>
             </div>
             
-            <div className="h-64 flex items-end gap-2 px-4 bg-white/[0.01] rounded-2xl relative">
+            <div className="h-64 flex items-end gap-2 px-4 bg-white/[0.01] rounded-2xl relative mb-12">
               {/* Simple chart logic based on bookings per month */}
               {(() => {
                 const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -748,6 +767,93 @@ export default function App() {
                   </div>
                 ));
               })()}
+            </div>
+
+            <div className="mt-12 pt-8 border-t border-white/5">
+              <h4 className="text-lg font-serif text-brand-cream mb-6">Histórico de Transações</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">
+                      <th className="font-black py-4 px-4 whitespace-nowrap">Data</th>
+                      <th className="font-black py-4 px-4 whitespace-nowrap">Hóspede e Quarto</th>
+                      <th className="font-black py-4 px-4 text-right whitespace-nowrap">Estadia</th>
+                      <th className="font-black py-4 px-4 text-right whitespace-nowrap">Consumo</th>
+                      <th className="font-black py-4 px-4 text-right whitespace-nowrap">Desconto</th>
+                      <th className="font-black py-4 px-4 text-right whitespace-nowrap">Total Pago</th>
+                      <th className="font-black py-4 px-4 whitespace-nowrap">Pagamento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookings.filter(b => b.status === 'CHECKED_OUT').sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0)).map((b, idx) => {
+                      const stayTotal = b.totalPrice || 0;
+                      const consumptionTotal = b.consumptions?.reduce((acc, c) => acc + (c.price * c.quantity), 0) || 0;
+                      const discount = b.discount || 0;
+                      const finalTotal = b.finalTotal || Math.max(0, stayTotal + consumptionTotal - discount);
+                      const room = rooms.find(r => r.id === b.roomId);
+                      
+                      return (
+                        <tr key={b.id || idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group align-top">
+                          <td className="py-4 px-4 text-xs text-slate-400">
+                            {b.checkedOutAt ? new Date(b.checkedOutAt.toDate()).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                          </td>
+                          <td className="py-4 px-4 min-w-[200px]">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-brand-cream">{b.guestName}</p>
+                              {b.source === 'AIRBNB' && (
+                                <span className="bg-brand-gold/20 text-brand-gold text-[8px] font-black uppercase px-2 py-0.5 rounded tracking-widest">Airbnb</span>
+                              )}
+                              {b.source === 'BOOKING' && (
+                                <span className="bg-sky-500/20 text-sky-400 text-[8px] font-black uppercase px-2 py-0.5 rounded tracking-widest">Booking</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5 mb-2">Quarto {room?.number || '-'}</p>
+                            
+                            {b.consumptions && b.consumptions.length > 0 && (
+                              <div className="text-[10px] text-slate-500 bg-white/5 p-2 rounded max-h-24 overflow-y-auto">
+                                <p className="uppercase font-black text-[8px] text-brand-gold/70 mb-1 border-b border-brand-gold/10 pb-1">Consumos ({b.consumptions.length})</p>
+                                <div className="space-y-1">
+                                  {b.consumptions.map((c, i) => (
+                                    <div key={i} className="flex justify-between items-center gap-4">
+                                      <span className="truncate">{c.quantity}x {c.productName}</span>
+                                      <span className="font-mono text-[9px] text-slate-600 shrink-0">R$ {(c.price * c.quantity).toLocaleString('pt-BR')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">
+                            {b.source === 'AIRBNB' ? (
+                              <span className="text-[10px] text-brand-gold/70 block">Airbnb<br/>(R$ {stayTotal.toLocaleString('pt-BR')})</span>
+                            ) : (
+                              `R$ ${stayTotal.toLocaleString('pt-BR')},00`
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">R$ {consumptionTotal.toLocaleString('pt-BR')},00</td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-red-400/80">- R$ {discount.toLocaleString('pt-BR')},00</td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-brand-gold font-bold">R$ {finalTotal.toLocaleString('pt-BR')},00</td>
+                          <td className="py-4 px-4">
+                            <span className="text-[9px] uppercase tracking-widest font-black px-2 py-1 bg-white/5 rounded text-emerald-500 whitespace-nowrap">
+                              {b.paymentMethod === 'PIX' ? 'PIX' : 
+                               b.paymentMethod === 'DINHEIRO' ? 'Dinheiro' : 
+                               b.paymentMethod === 'CREDITO' ? 'Crédito' : 
+                               b.paymentMethod === 'DEBITO' ? 'Débito' : '-'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {bookings.filter(b => b.status === 'CHECKED_OUT').length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-600 italic text-sm">
+                          Nenhum histórico financeiro encontrado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -803,6 +909,7 @@ export default function App() {
           booking={bookings.find(b => b.id === selectedBooking?.id) || null}
           products={products}
           onAddConsumption={handleAddConsumption}
+          onRemoveConsumption={handleRemoveConsumption}
           onCheckOut={handleCheckOut}
         />
 
