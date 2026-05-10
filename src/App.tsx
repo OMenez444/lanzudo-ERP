@@ -311,6 +311,30 @@ export default function App() {
     }
   };
 
+  const handleExtendStay = async (bookingId: string, newCheckOut: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    try {
+      const checkInDate = new Date(booking.checkIn);
+      const oldCheckOutDate = new Date(booking.checkOut);
+      const newCheckOutDate = new Date(newCheckOut);
+      
+      const oldNights = Math.max(1, Math.ceil((oldCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const newNights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      
+      const pricePerNight = (booking.totalPrice + (booking.discount || 0)) / oldNights;
+      const newTotalPrice = Math.max(0, (pricePerNight * newNights) - (booking.discount || 0));
+
+      await updateDoc(doc(db, 'bookings', bookingId), {
+        checkOut: newCheckOut,
+        totalPrice: newTotalPrice
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
   const handleConfirmBooking = async (data: {
     guestName: string;
     roomId: string;
@@ -911,6 +935,7 @@ export default function App() {
           onAddConsumption={handleAddConsumption}
           onRemoveConsumption={handleRemoveConsumption}
           onCheckOut={handleCheckOut}
+          onExtendStay={handleExtendStay}
         />
 
         <AddGuestModal

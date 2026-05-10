@@ -17,6 +17,7 @@ interface ConsumptionModalProps {
   onAddConsumption: (bookingId: string, product: Product, quantity: number) => Promise<void>;
   onRemoveConsumption: (bookingId: string, consumptionId: string) => Promise<void>;
   onCheckOut: (roomId: string) => Promise<void>;
+  onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -26,12 +27,15 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   products,
   onAddConsumption,
   onRemoveConsumption,
-  onCheckOut
+  onCheckOut,
+  onExtendStay
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isExtending, setIsExtending] = useState(false);
+  const [newCheckOutDate, setNewCheckOutDate] = useState('');
 
   if (!isOpen || !booking) return null;
 
@@ -56,6 +60,17 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       onClose();
     } finally {
       setIsCheckingOut(false);
+    }
+  };
+
+  const handleExtend = async () => {
+    if (!newCheckOutDate) return;
+    setIsExtending(true);
+    try {
+      await onExtendStay(booking.id, newCheckOutDate);
+      setNewCheckOutDate('');
+    } finally {
+      setIsExtending(false);
     }
   };
 
@@ -167,6 +182,25 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 uppercase tracking-tighter">Check-out Previsto</span>
                     <span className="text-slate-300 font-mono">{formatDisplayDate(booking.checkOut)}</span>
+                  </div>
+                  <div className="pt-4 mt-2 border-t border-white/5 space-y-3">
+                    <span className="text-[10px] font-black uppercase text-brand-gold tracking-widest block">Prolongar Estadia</span>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="date"
+                        min={booking.checkOut}
+                        value={newCheckOutDate}
+                        onChange={(e) => setNewCheckOutDate(e.target.value)}
+                        className="flex-1 bg-white/5 border border-white/5 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:border-brand-gold/50"
+                      />
+                      <button 
+                        onClick={handleExtend}
+                        disabled={!newCheckOutDate || isExtending}
+                        className="bg-brand-gold text-brand-bg px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:grayscale transition-all"
+                      >
+                        {isExtending ? '...' : 'Salvar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
