@@ -188,7 +188,8 @@ export default function App() {
       return acc + (price * qty);
     }, 0) || 0;
     
-    const stayTotal = Number(activeBooking.totalPrice) || 0;
+    const isAirbnb = activeBooking.source === 'AIRBNB';
+    const stayTotal = isAirbnb ? (Number(activeBooking.extraStayCharges) || 0) : (Number(activeBooking.totalPrice) || 0);
     const grandTotal = Math.max(0, stayTotal + consumptionsTotal - discount);
 
     try {
@@ -322,13 +323,27 @@ export default function App() {
       
       const oldNights = Math.max(1, Math.ceil((oldCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
       const newNights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const extraNights = Math.max(0, newNights - oldNights);
       
-      const pricePerNight = (booking.totalPrice + (booking.discount || 0)) / oldNights;
-      const newTotalPrice = Math.max(0, (pricePerNight * newNights) - (booking.discount || 0));
+      let extraPricePerNight = (booking.totalPrice + (booking.discount || 0)) / oldNights;
+
+      // Se a diária estava zerada ou muito baixa (ex: repasse do Airbnb não lançado),
+      // cobramos o valor padrão na extensão feita direto no balcão.
+      if (extraPricePerNight === 0) {
+        extraPricePerNight = 139;
+        if (booking.guestsCount === 2) extraPricePerNight = 189;
+        if (booking.guestsCount === 3) extraPricePerNight = 279;
+        if (booking.guestsCount >= 4) extraPricePerNight = 279;
+      }
+      
+      const addedAmount = extraPricePerNight * extraNights;
+      const newTotalPrice = booking.totalPrice + addedAmount;
+      const newExtraCharges = (booking.extraStayCharges || 0) + addedAmount;
 
       await updateDoc(doc(db, 'bookings', bookingId), {
         checkOut: newCheckOut,
-        totalPrice: newTotalPrice
+        totalPrice: newTotalPrice,
+        extraStayCharges: newExtraCharges
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
@@ -810,7 +825,8 @@ export default function App() {
                   </thead>
                   <tbody>
                     {bookings.filter(b => b.status === 'CHECKED_OUT').sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0)).map((b, idx) => {
-                      const stayTotal = b.totalPrice || 0;
+                      const isAirbnb = b.source === 'AIRBNB';
+                      const stayTotal = isAirbnb ? (Number(b.extraStayCharges) || 0) : (Number(b.totalPrice) || 0);
                       const consumptionTotal = b.consumptions?.reduce((acc, c) => acc + (c.price * c.quantity), 0) || 0;
                       const discount = b.discount || 0;
                       const finalTotal = b.finalTotal || Math.max(0, stayTotal + consumptionTotal - discount);

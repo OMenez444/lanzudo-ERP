@@ -75,6 +75,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   };
 
   const totalConsumido = booking.consumptions?.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0;
+  
+  const isAirbnb = booking.source === 'AIRBNB';
+  const originalAirbnbTotal = (Number(booking.totalPrice) || 0) - (Number(booking.extraStayCharges) || 0);
+  const stayTotal = isAirbnb ? (Number(booking.extraStayCharges) || 0) : (Number(booking.totalPrice) || 0);
+  const repasseAirbnb = isAirbnb ? originalAirbnbTotal : 0;
+  const grandTotal = totalConsumido + stayTotal;
 
   return (
     <AnimatePresence>
@@ -255,20 +261,26 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
               <div className="pt-6 border-t border-white/5 space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
-                    <span>Subtotal Consumo</span>
+                    <span>Subtotal de Consumo</span>
                     <span className="text-slate-300">R$ {totalConsumido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
-                    <span>Diárias Estadia</span>
-                    <span className="text-slate-300">R$ {(booking.totalPrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>Diárias Estadia {isAirbnb && repasseAirbnb > 0 && <span className="lowercase text-[8px] text-brand-gold/70">(Adicionais)</span>}</span>
+                    <span className="text-slate-300">R$ {stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
+                  {isAirbnb && repasseAirbnb > 0 && (
+                    <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                      <span>Repasse Airbnb (Já Pago)</span>
+                      <span className="text-brand-gold">R$ {repasseAirbnb.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   <div className="pt-4 flex justify-between items-end">
                     <div className="flex items-center gap-2 text-brand-gold">
                       <CreditCard size={18} />
                       <span className="text-[10px] font-black uppercase tracking-[0.2em]">Total Geral</span>
                     </div>
                     <span className="text-3xl font-serif text-brand-cream">
-                      R$ {((booking.totalPrice || 0) + totalConsumido).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      R$ {grandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

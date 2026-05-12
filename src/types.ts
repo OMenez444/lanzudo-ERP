@@ -65,5 +65,6 @@ export interface Booking {
   paymentMethod?: PaymentMethod;
   finalTotal?: number;
   discount?: number;
+  extraStayCharges?: number;
   checkedOutAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
