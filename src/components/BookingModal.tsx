@@ -287,7 +287,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <div className="flex items-center gap-2 text-slate-500">
                   <CreditCard size={18} />
                   <span className="text-xs font-bold uppercase tracking-tighter">
-                    Estadia: {nights} noites | Total: R$ {totalPrice.toLocaleString('pt-BR')},00
+                    Estadia: {nights} noites | Total: R$ {totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex gap-4">

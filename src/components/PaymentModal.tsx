@@ -104,17 +104,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 {isAirbnb ? (
                   <div className="flex justify-between text-xs uppercase tracking-widest">
                     <span className="text-slate-500 font-bold">Total Diárias (Airbnb)</span>
-                    <span className="text-brand-gold font-mono italic">Já Pago (Repasse: R$ {repasseAirbnb.toLocaleString('pt-BR')},00)</span>
+                    <span className="text-brand-gold font-mono italic">Já Pago (Repasse: R$ {repasseAirbnb.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
                   </div>
                 ) : (
                   <div className="flex justify-between text-xs uppercase tracking-widest">
                     <span className="text-slate-500 font-bold">Total Diárias</span>
-                    <span className="text-slate-300 font-mono italic">R$ {stayTotal.toLocaleString('pt-BR')},00</span>
+                    <span className="text-slate-300 font-mono italic">R$ {stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs uppercase tracking-widest">
                   <span className="text-slate-500 font-bold">Total Consumo</span>
-                  <span className="text-slate-300 font-mono italic">R$ {consumptionsTotal.toLocaleString('pt-BR')},00</span>
+                  <span className="text-slate-300 font-mono italic">R$ {consumptionsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs uppercase tracking-widest pt-2">
                   <span className="text-brand-gold font-bold">Desconto Especial</span>
@@ -133,7 +133,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
               <div className="pt-6 flex justify-between items-end">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold">Valor Final</span>
-                <span className="text-4xl font-serif text-brand-cream italic">R$ {grandTotal.toLocaleString('pt-BR')},00</span>
+                <span className="text-4xl font-serif text-brand-cream italic">R$ {grandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
 

@@ -121,7 +121,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       <option value="" className="bg-brand-slate text-slate-500">Escolha um item do catálogo</option>
                       {products.map(p => (
                         <option key={p.id} value={p.id} className="bg-brand-slate">
-                          {p.name} - R$ {p.price.toLocaleString('pt-BR')},00
+                          {p.name} - R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </option>
                       ))}
                     </select>
@@ -231,12 +231,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     <div>
                       <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tight">{item.productName}</p>
                       <p className="text-[10px] text-slate-500 font-mono">
-                        {item.quantity}x R$ {(item.price || 0).toLocaleString('pt-BR')},00
+                        {item.quantity}x R$ {(item.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-brand-gold font-mono">
-                        R$ {((item.price || 0) * item.quantity).toLocaleString('pt-BR')},00
+                        R$ {((item.price || 0) * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       <p className="text-[8px] text-slate-600 uppercase font-black">Lançado agora</p>
                     </div>
@@ -256,11 +256,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
                     <span>Subtotal Consumo</span>
-                    <span className="text-slate-300">R$ {totalConsumido.toLocaleString('pt-BR')},00</span>
+                    <span className="text-slate-300">R$ {totalConsumido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
                     <span>Diárias Estadia</span>
-                    <span className="text-slate-300">R$ {(booking.totalPrice || 0).toLocaleString('pt-BR')},00</span>
+                    <span className="text-slate-300">R$ {(booking.totalPrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="pt-4 flex justify-between items-end">
                     <div className="flex items-center gap-2 text-brand-gold">
@@ -268,7 +268,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       <span className="text-[10px] font-black uppercase tracking-[0.2em]">Total Geral</span>
                     </div>
                     <span className="text-3xl font-serif text-brand-cream">
-                      R$ {((booking.totalPrice || 0) + totalConsumido).toLocaleString('pt-BR')},00
+                      R$ {((booking.totalPrice || 0) + totalConsumido).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

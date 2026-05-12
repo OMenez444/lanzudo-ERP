@@ -156,7 +156,7 @@ export default function App() {
   const stats: Stat[] = [
     { label: 'Ocupação', value: `${occupancyRate}%`, sub: `${occupiedRooms} de ${rooms.length} UNIDADES`, trend: 'up' },
     { label: 'Check-ins', value: checkinsToday.toString(), sub: 'Hoje', trend: 'up' },
-    { label: 'Receita', value: `R$ ${totalRevenueValue.toLocaleString('pt-BR')}`, sub: 'Total em caixa', trend: 'up' },
+    { label: 'Receita', value: `R$ ${totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Total em caixa', trend: 'up' },
     { label: 'Limpeza', value: cleaningCount.toString(), sub: 'Aguardando', trend: cleaningCount > 0 ? 'up' : 'down' },
   ];
 
@@ -567,7 +567,7 @@ export default function App() {
                           {item.quantity} un
                         </td>
                         <td className="py-4 font-mono text-brand-cream">
-                          R$ {(item.price * item.quantity).toLocaleString('pt-BR')},00
+                          R$ {(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-4 text-[10px] text-slate-600 uppercase font-black">
                           {new Date(item.timestamp).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
@@ -725,7 +725,7 @@ export default function App() {
                   <div className="flex justify-between items-center bg-white/[0.03] p-4 rounded-2xl border border-white/5">
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Preço Unitário</p>
-                      <span className="text-brand-gold font-mono italic text-lg">R$ {prod.price.toLocaleString('pt-BR')},00</span>
+                      <span className="text-brand-gold font-mono italic text-lg">R$ {prod.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <button 
                       onClick={() => {
@@ -754,7 +754,7 @@ export default function App() {
             <div className="flex justify-between items-end mb-8">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Receita Acumulada</p>
-                <h3 className="text-4xl font-serif text-brand-gold">R$ {totalRevenueValue.toLocaleString('pt-BR')},00</h3>
+                <h3 className="text-4xl font-serif text-brand-gold">R$ {totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Total de Reservas</p>
@@ -783,7 +783,7 @@ export default function App() {
                     >
                       {rev > 0 && (
                         <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-brand-slate text-[8px] font-black p-2 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          R$ {rev.toLocaleString('pt-BR')}
+                          R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       )}
                     </div>
@@ -840,7 +840,7 @@ export default function App() {
                                   {b.consumptions.map((c, i) => (
                                     <div key={i} className="flex justify-between items-center gap-4">
                                       <span className="truncate">{c.quantity}x {c.productName}</span>
-                                      <span className="font-mono text-[9px] text-slate-600 shrink-0">R$ {(c.price * c.quantity).toLocaleString('pt-BR')}</span>
+                                      <span className="font-mono text-[9px] text-slate-600 shrink-0">R$ {(c.price * c.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -849,14 +849,14 @@ export default function App() {
                           </td>
                           <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">
                             {b.source === 'AIRBNB' ? (
-                              <span className="text-[10px] text-brand-gold/70 block">Airbnb<br/>(R$ {stayTotal.toLocaleString('pt-BR')})</span>
+                              <span className="text-[10px] text-brand-gold/70 block">Airbnb<br/>(R$ {stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
                             ) : (
-                              `R$ ${stayTotal.toLocaleString('pt-BR')},00`
+                              `R$ ${stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                             )}
                           </td>
-                          <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">R$ {consumptionTotal.toLocaleString('pt-BR')},00</td>
-                          <td className="py-4 px-4 text-sm font-mono text-right text-red-400/80">- R$ {discount.toLocaleString('pt-BR')},00</td>
-                          <td className="py-4 px-4 text-sm font-mono text-right text-brand-gold font-bold">R$ {finalTotal.toLocaleString('pt-BR')},00</td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">R$ {consumptionTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-red-400/80">- R$ {discount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-4 px-4 text-sm font-mono text-right text-brand-gold font-bold">R$ {finalTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="py-4 px-4">
                             <span className="text-[9px] uppercase tracking-widest font-black px-2 py-1 bg-white/5 rounded text-emerald-500 whitespace-nowrap">
                               {b.paymentMethod === 'PIX' ? 'PIX' : 
