@@ -19,6 +19,7 @@ interface ConsumptionModalProps {
   onCheckOut: (roomId: string) => Promise<void>;
   onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
   onUpdateBooking: (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => Promise<void>;
+  onCancelBooking: (bookingId: string) => Promise<void>;
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -30,7 +31,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onRemoveConsumption,
   onCheckOut,
   onExtendStay,
-  onUpdateBooking
+  onUpdateBooking,
+  onCancelBooking
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
@@ -43,6 +45,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [editGuestsCount, setEditGuestsCount] = useState(1);
   const [editStayTotal, setEditStayTotal] = useState(0);
   const [isUpdatingDetails, setIsUpdatingDetails] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   if (!isOpen || !booking) return null;
 
@@ -91,6 +94,17 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       setIsEditingDetails(false);
     } finally {
       setIsUpdatingDetails(false);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    if (window.confirm("Certeza que deseja cancelar esta reserva? O quarto ficará disponível novamente.")) {
+      setIsCancelling(true);
+      try {
+        await onCancelBooking(booking.id);
+      } finally {
+        setIsCancelling(false);
+      }
     }
   };
 
@@ -382,6 +396,14 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     className="w-full py-2 text-slate-500 text-[9px] font-black uppercase tracking-[0.3em] hover:text-white transition-colors"
                   >
                     Fechar Painel
+                  </button>
+                  
+                  <button 
+                    onClick={handleCancelBooking}
+                    disabled={isCancelling}
+                    className="w-full py-2 text-red-500/50 hover:text-red-500 text-[9px] font-black uppercase tracking-[0.3em] transition-colors"
+                  >
+                    {isCancelling ? 'CANCELANDO...' : 'Cancelar Reserva'}
                   </button>
                 </div>
               </div>

@@ -356,7 +356,7 @@ export default function App() {
 
     try {
       const isAirbnb = booking.source === 'AIRBNB';
-      const dataToUpdate: any = {};
+      const dataToUpdate: Record<string, number> = {};
       
       if (updates.guestsCount !== undefined) {
         dataToUpdate.guestsCount = updates.guestsCount;
@@ -371,6 +371,34 @@ export default function App() {
       }
 
       await updateDoc(doc(db, 'bookings', bookingId), dataToUpdate);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      batch.update(doc(db, 'bookings', bookingId), {
+        status: 'CANCELLED',
+        cancelledAt: serverTimestamp()
+      });
+
+      batch.update(doc(db, 'rooms', booking.roomId), {
+        status: 'AVAILABLE',
+        guest: null
+      });
+
+      await batch.commit();
+      
+      if (selectedBooking?.id === bookingId) {
+        setIsConsumptionModalOpen(false);
+        setSelectedBooking(null);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
     }
@@ -979,6 +1007,7 @@ export default function App() {
           onCheckOut={handleCheckOut}
           onExtendStay={handleExtendStay}
           onUpdateBooking={handleUpdateBooking}
+          onCancelBooking={handleCancelBooking}
         />
 
         <AddGuestModal
