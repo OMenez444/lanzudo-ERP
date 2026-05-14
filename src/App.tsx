@@ -350,6 +350,32 @@ export default function App() {
     }
   };
 
+  const handleUpdateBooking = async (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    try {
+      const isAirbnb = booking.source === 'AIRBNB';
+      const dataToUpdate: any = {};
+      
+      if (updates.guestsCount !== undefined) {
+        dataToUpdate.guestsCount = updates.guestsCount;
+      }
+      
+      if (updates.stayTotal !== undefined) {
+        if (isAirbnb) {
+          dataToUpdate.extraStayCharges = updates.stayTotal;
+        } else {
+          dataToUpdate.totalPrice = updates.stayTotal;
+        }
+      }
+
+      await updateDoc(doc(db, 'bookings', bookingId), dataToUpdate);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
   const handleConfirmBooking = async (data: {
     guestName: string;
     roomId: string;
@@ -952,6 +978,7 @@ export default function App() {
           onRemoveConsumption={handleRemoveConsumption}
           onCheckOut={handleCheckOut}
           onExtendStay={handleExtendStay}
+          onUpdateBooking={handleUpdateBooking}
         />
 
         <AddGuestModal

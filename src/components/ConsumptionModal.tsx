@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2 } from 'lucide-react';
+import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check } from 'lucide-react';
 import { Booking, Product } from '../types';
 import { formatDisplayDate } from '../lib/dateUtils';
 
@@ -18,6 +18,7 @@ interface ConsumptionModalProps {
   onRemoveConsumption: (bookingId: string, consumptionId: string) => Promise<void>;
   onCheckOut: (roomId: string) => Promise<void>;
   onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
+  onUpdateBooking: (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => Promise<void>;
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -28,7 +29,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onAddConsumption,
   onRemoveConsumption,
   onCheckOut,
-  onExtendStay
+  onExtendStay,
+  onUpdateBooking
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
@@ -36,6 +38,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [newCheckOutDate, setNewCheckOutDate] = useState('');
+
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editGuestsCount, setEditGuestsCount] = useState(1);
+  const [editStayTotal, setEditStayTotal] = useState(0);
+  const [isUpdatingDetails, setIsUpdatingDetails] = useState(false);
 
   if (!isOpen || !booking) return null;
 
@@ -71,6 +78,19 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       setNewCheckOutDate('');
     } finally {
       setIsExtending(false);
+    }
+  };
+
+  const handleUpdateDetails = async () => {
+    setIsUpdatingDetails(true);
+    try {
+      await onUpdateBooking(booking.id, {
+        guestsCount: editGuestsCount,
+        stayTotal: editStayTotal
+      });
+      setIsEditingDetails(false);
+    } finally {
+      setIsUpdatingDetails(false);
     }
   };
 
@@ -172,9 +192,24 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
               </div>
 
               <div className="pt-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <User className="text-slate-600" size={16} />
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Informações da Estadia</span>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <User className="text-slate-600" size={16} />
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Informações da Estadia</span>
+                  </div>
+                  {!isEditingDetails ? (
+                    <button onClick={() => {
+                      setEditGuestsCount(booking.guestsCount || 1);
+                      setEditStayTotal(stayTotal);
+                      setIsEditingDetails(true);
+                    }} className="text-brand-gold hover:text-brand-gold/80 transition-colors p-1" title="Editar Informações">
+                      <Edit3 size={14} />
+                    </button>
+                  ) : (
+                    <button onClick={() => setIsEditingDetails(false)} className="text-slate-500 hover:text-slate-300 transition-colors p-1" title="Cancelar Edição">
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
                 <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 space-y-4">
                   <div className="flex justify-between items-center text-xs">
@@ -189,6 +224,54 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     <span className="text-slate-500 uppercase tracking-tighter">Check-out Previsto</span>
                     <span className="text-slate-300 font-mono">{formatDisplayDate(booking.checkOut)}</span>
                   </div>
+                  
+                  {isEditingDetails ? (
+                    <>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 uppercase tracking-tighter">Qtd. Hóspedes</span>
+                        <input 
+                          type="number"
+                          min="1"
+                          className="bg-white/5 border border-white/5 rounded px-2 py-1 w-20 text-right text-brand-cream font-mono focus:outline-none focus:border-brand-gold/50 transition-all"
+                          value={editGuestsCount}
+                          onChange={(e) => setEditGuestsCount(parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 uppercase tracking-tighter">Valor das Diárias</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-500 font-mono">R$</span>
+                          <input 
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="bg-white/5 border border-white/5 rounded px-2 py-1 w-24 text-right text-brand-cream font-mono focus:outline-none focus:border-brand-gold/50 transition-all"
+                            value={editStayTotal}
+                            onChange={(e) => setEditStayTotal(parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+                      <button 
+                         onClick={handleUpdateDetails}
+                         disabled={isUpdatingDetails}
+                         className="w-full bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/30 disabled:opacity-50 transition-colors rounded-xl py-3 text-[10px] uppercase font-black tracking-widest mt-2 flex items-center justify-center gap-2"
+                      >
+                         {isUpdatingDetails ? 'Salvando...' : <><Check size={14} /> Salvar Alterações</>}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 uppercase tracking-tighter">Qtd. Hóspedes</span>
+                        <span className="text-slate-300 font-mono">{booking.guestsCount || 1}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 uppercase tracking-tighter">Valor Diárias {isAirbnb && repasseAirbnb > 0 && <span className="lowercase text-[8px] text-brand-gold/70 ml-1">(Adicionais)</span>}</span>
+                        <span className="text-slate-300 font-mono">R$ {stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </>
+                  )}
+
                   <div className="pt-4 mt-2 border-t border-white/5 space-y-3">
                     <span className="text-[10px] font-black uppercase text-brand-gold tracking-widest block">Prolongar Estadia</span>
                     <div className="flex items-center gap-2">
