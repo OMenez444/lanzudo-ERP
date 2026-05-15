@@ -321,8 +321,8 @@ export default function App() {
       const oldCheckOutDate = new Date(booking.checkOut);
       const newCheckOutDate = new Date(newCheckOut);
       
-      const oldNights = Math.max(1, Math.ceil((oldCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
-      const newNights = Math.max(1, Math.ceil((newCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const oldNights = Math.max(1, Math.round((oldCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const newNights = Math.max(1, Math.round((newCheckOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
       const extraNights = Math.max(0, newNights - oldNights);
       
       let extraPricePerNight = (booking.totalPrice + (booking.discount || 0)) / oldNights;
@@ -364,7 +364,9 @@ export default function App() {
       
       if (updates.stayTotal !== undefined) {
         if (isAirbnb) {
+          const extraChargesDiff = updates.stayTotal - (booking.extraStayCharges || 0);
           dataToUpdate.extraStayCharges = updates.stayTotal;
+          dataToUpdate.totalPrice = booking.totalPrice + extraChargesDiff;
         } else {
           dataToUpdate.totalPrice = updates.stayTotal;
         }
@@ -419,13 +421,17 @@ export default function App() {
       let pricePerNight = 139;
       if (data.guestsCount === 2) pricePerNight = 189;
       if (data.guestsCount === 3) pricePerNight = 279;
-      if ((data.guestsCount >= 4 || data.source === 'AIRBNB') && data.customPricePerNight !== undefined) {
+      if (data.guestsCount >= 4) pricePerNight = 279; // fallback
+
+      // Airbnb is already paid, custom price per night represents the Platform payout (optional)
+      if (data.source === 'AIRBNB') {
+        pricePerNight = data.customPricePerNight || 0;
+      } else if (data.guestsCount >= 4 && data.customPricePerNight !== undefined && data.customPricePerNight > 0) {
+        // Direct or Booking with 4+ guests overrides the price
         pricePerNight = data.customPricePerNight;
-      } else if (data.guestsCount >= 4) {
-        pricePerNight = 279;
       }
 
-      const nights = Math.max(1, Math.ceil((new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
+      const nights = Math.max(1, Math.round((new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / (1000 * 60 * 60 * 24)));
       const discount = data.discount || 0;
       const totalPrice = (pricePerNight * nights) - discount;
 
