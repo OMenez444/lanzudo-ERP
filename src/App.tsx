@@ -10,7 +10,8 @@ import {
   ShoppingBag,
   LogIn,
   LogOut,
-  Edit2
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { RoomCard } from './components/RoomCard';
@@ -34,7 +35,8 @@ import {
   doc, 
   query, 
   orderBy,
-  serverTimestamp 
+  serverTimestamp,
+  deleteDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType, auth, signInWithGoogle } from './lib/firebase';
@@ -403,6 +405,16 @@ export default function App() {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (window.confirm("Certeza que deseja excluir permanentemente este registro financeiro?")) {
+      try {
+        await deleteDoc(doc(db, 'bookings', bookingId));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `bookings/${bookingId}`);
+      }
     }
   };
 
@@ -934,12 +946,21 @@ export default function App() {
                           <td className="py-4 px-4 text-sm font-mono text-right text-red-400/80">- R$ {discount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="py-4 px-4 text-sm font-mono text-right text-brand-gold font-bold">R$ {finalTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="py-4 px-4">
-                            <span className="text-[9px] uppercase tracking-widest font-black px-2 py-1 bg-white/5 rounded text-emerald-500 whitespace-nowrap">
-                              {b.paymentMethod === 'PIX' ? 'PIX' : 
-                               b.paymentMethod === 'DINHEIRO' ? 'Dinheiro' : 
-                               b.paymentMethod === 'CREDITO' ? 'Crédito' : 
-                               b.paymentMethod === 'DEBITO' ? 'Débito' : '-'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] uppercase tracking-widest font-black px-2 py-1 bg-white/5 rounded text-emerald-500 whitespace-nowrap">
+                                {b.paymentMethod === 'PIX' ? 'PIX' : 
+                                 b.paymentMethod === 'DINHEIRO' ? 'Dinheiro' : 
+                                 b.paymentMethod === 'CREDITO' ? 'Crédito' : 
+                                 b.paymentMethod === 'DEBITO' ? 'Débito' : '-'}
+                              </span>
+                              <button
+                                onClick={() => b.id && handleDeleteBooking(b.id)}
+                                className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                title="Excluir Permanentemente"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
