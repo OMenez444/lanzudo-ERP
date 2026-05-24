@@ -11,7 +11,8 @@ import {
   LogIn,
   LogOut,
   Edit2,
-  Trash2
+  Trash2,
+  Download
 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { RoomCard } from './components/RoomCard';
@@ -38,7 +39,7 @@ import {
   serverTimestamp,
   deleteDoc
 } from 'firebase/firestore';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType, auth, signInWithGoogle } from './lib/firebase';
 import { getLocalDateString } from './lib/dateUtils';
 
@@ -62,6 +63,11 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -418,6 +424,49 @@ export default function App() {
     }
   };
 
+  const handleExportCSV = () => {
+    const checkedOutBookings = bookings.filter(b => b.status === 'CHECKED_OUT').sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0));
+    
+    if (checkedOutBookings.length === 0) {
+      alert("Não há dados para exportar.");
+      return;
+    }
+    
+    // Headers
+    let csvContent = "Data de Saida,Hospede,Quarto,Recepcionista,Total Estadia,Total Consumo,Desconto,Total Pago,Metodo de Pagamento,Origem\n";
+    
+    checkedOutBookings.forEach(b => {
+      const room = rooms.find(r => r.id === b.roomId);
+      const isAirbnb = b.source === 'AIRBNB';
+      const stayTotal = isAirbnb ? (Number(b.extraStayCharges) || 0) : (Number(b.totalPrice) || 0);
+      const consumptionTotal = b.consumptions?.reduce((acc, c) => acc + (c.price * c.quantity), 0) || 0;
+      const discount = b.discount || 0;
+      const finalTotal = b.finalTotal || Math.max(0, stayTotal + consumptionTotal - discount);
+      
+      const dateStr = b.checkedOutAt ? b.checkedOutAt.toDate().toLocaleDateString('pt-BR') : '';
+      const guestName = `"${b.guestName}"`;
+      const roomStr = `"${room ? room.number : '-'}"`;
+      const receptionist = `"${b.createdBy?.name || '-'}"`;
+      const stayTotalStr = stayTotal.toFixed(2).replace('.', ',');
+      const consumptionTotalStr = consumptionTotal.toFixed(2).replace('.', ',');
+      const discountStr = discount.toFixed(2).replace('.', ',');
+      const finalTotalStr = finalTotal.toFixed(2).replace('.', ',');
+      const paymentMethod = b.paymentMethod || '-';
+      const source = b.source || '-';
+      
+      csvContent += `${dateStr},${guestName},${roomStr},${receptionist},${stayTotalStr},${consumptionTotalStr},${discountStr},${finalTotalStr},${paymentMethod},${source}\n`;
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `financeiro_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleConfirmBooking = async (data: {
     guestName: string;
     roomId: string;
@@ -460,7 +509,12 @@ export default function App() {
         totalPrice: Math.max(0, totalPrice),
         discount: discount,
         source: data.source,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        createdBy: user ? {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+        } : undefined
       });
 
       batch.update(doc(db, 'rooms', data.roomId), {
@@ -482,6 +536,24 @@ export default function App() {
     (r.guest && r.guest.toLowerCase().includes(search.toLowerCase())) ||
     r.type.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      if (isLoginMode) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName });
+        // Force refresh user to reflect changes
+        setUser({ ...userCredential.user, displayName });
+      }
+    } catch (err) {
+      const error = err as Error;
+      setAuthError(error.message || 'Erro de autenticação');
+    }
+  };
 
   if (loading) {
     return (
@@ -505,7 +577,7 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md p-12 bg-brand-slate border border-white/5 rounded-[40px] text-center shadow-2xl"
+          className="w-full max-w-md p-12 bg-brand-slate border border-white/5 rounded-[40px] text-center shadow-2xl relative"
         >
           <div className="mb-8">
             <h1 className="text-4xl font-serif text-brand-gold italic font-bold tracking-tighter uppercase mb-2">Lanzudo's</h1>
@@ -514,20 +586,65 @@ export default function App() {
           
           <div className="space-y-6">
             <p className="text-slate-400 text-sm italic">
-              "Bem-vindo ao sistema de gestão que redefine a hospitalidade de luxo."
+              {isLoginMode ? '"Acesso restrito a recepcionistas e gerência."' : '"Crie sua credencial de acesso ao sistema."'}
             </p>
+            
+            <form onSubmit={handleAuth} className="space-y-4">
+              {!isLoginMode && (
+                <div>
+                  <input 
+                    type="text" 
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Nome do Recepcionista" 
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white text-center"
+                    required 
+                  />
+                </div>
+              )}
+              <div>
+                <input 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email institucional" 
+                  className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white text-center"
+                  required 
+                />
+              </div>
+              <div>
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Senha" 
+                  className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white text-center"
+                  required 
+                />
+              </div>
+              {authError && <p className="text-red-400 text-xs truncate">{authError}</p>}
+              <button 
+                type="submit"
+                className="w-full bg-brand-gold hover:bg-brand-gold/80 text-brand-bg py-4 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 transition-all shadow-xl shadow-brand-gold/20"
+              >
+                <LogIn size={20} />
+                {isLoginMode ? 'Entrar no Sistema' : 'Criar Conta'}
+              </button>
+            </form>
             
             <button 
               onClick={signInWithGoogle}
-              className="w-full bg-brand-gold hover:bg-brand-gold/80 text-brand-bg py-4 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 transition-all shadow-xl shadow-brand-gold/20"
+              className="w-full border border-white/10 hover:bg-white/5 text-white py-4 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 transition-all text-xs"
             >
-              <LogIn size={20} />
-              Acessar com Google
+              Acessar com Google Auth
             </button>
             
-            <p className="text-[10px] text-slate-600 uppercase font-black tracking-tighter cursor-help hover:text-slate-400 transition-colors">
-              Acesso restrito a colaboradores autorizados
-            </p>
+            <button
+              onClick={() => { setIsLoginMode(!isLoginMode); setAuthError(''); }}
+              className="mt-6 text-[10px] text-brand-gold uppercase font-black tracking-tighter hover:text-brand-gold/70 transition-colors"
+            >
+              {isLoginMode ? 'Precisa de acesso? Criar conta' : 'Já tem acesso? Entrar'}
+            </button>
           </div>
         </motion.div>
       </div>
@@ -843,9 +960,17 @@ export default function App() {
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Receita Acumulada</p>
                 <h3 className="text-4xl font-serif text-brand-gold">R$ {totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Total de Reservas</p>
-                <p className="text-lg text-emerald-500 font-bold">{bookings.filter(b => b.status === 'CHECKED_OUT').length}</p>
+              <div className="flex items-center gap-8">
+                <div className="text-right">
+                  <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Total de Reservas</p>
+                  <p className="text-lg text-emerald-500 font-bold">{bookings.filter(b => b.status === 'CHECKED_OUT').length}</p>
+                </div>
+                <button
+                  onClick={handleExportCSV}
+                  className="bg-brand-gold text-brand-bg px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-gold/10 hover:scale-105 transition-all"
+                >
+                  <Download size={16} /> Exportar
+                </button>
               </div>
             </div>
             
@@ -888,6 +1013,7 @@ export default function App() {
                     <tr className="text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">
                       <th className="font-black py-4 px-4 whitespace-nowrap">Data</th>
                       <th className="font-black py-4 px-4 whitespace-nowrap">Hóspede e Quarto</th>
+                      <th className="font-black py-4 px-4 whitespace-nowrap">Recepcionista</th>
                       <th className="font-black py-4 px-4 text-right whitespace-nowrap">Estadia</th>
                       <th className="font-black py-4 px-4 text-right whitespace-nowrap">Consumo</th>
                       <th className="font-black py-4 px-4 text-right whitespace-nowrap">Desconto</th>
@@ -934,6 +1060,9 @@ export default function App() {
                                 </div>
                               </div>
                             )}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-xs text-slate-400 capitalize">{b.createdBy?.name || '-'}</span>
                           </td>
                           <td className="py-4 px-4 text-sm font-mono text-right text-slate-400">
                             {b.source === 'AIRBNB' ? (

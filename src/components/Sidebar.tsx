@@ -26,8 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   return (
     <aside className="w-72 bg-brand-slate border-r border-white/5 p-8 hidden lg:flex flex-col h-full overflow-y-auto">
       <div className="mb-12">
-        <h1 className="text-3xl font-serif text-brand-gold italic font-bold">LANZUDO'S</h1>
-        <p className="text-[9px] tracking-[0.4em] text-brand-cream uppercase font-black">Hotel Experience</p>
+        <h1 className="text-3xl font-serif text-brand-gold italic font-bold tracking-wider">LANZUDO'S <span className="text-xl not-italic text-brand-cream">V2</span></h1>
+        <p className="text-[9px] tracking-[0.4em] text-brand-gold/70 uppercase font-black mt-1">Property Management</p>
       </div>
       
       <nav className="space-y-4 flex-1">

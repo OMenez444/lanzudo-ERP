@@ -117,7 +117,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ rooms, bookings, onA
                             <ShoppingBag size={10} className="text-brand-bg/40 opacity-0 group-hover/booking:opacity-100 transition-opacity" />
                          </div>
                          <p className="text-[8px] text-brand-bg/60 font-bold uppercase truncate leading-none">
-                            Estadia em curso
+                            {activeBooking.createdBy ? `Recepcionista: ${activeBooking.createdBy.name}` : `Estadia em curso`}
                          </p>
                       </motion.div>
                     )}

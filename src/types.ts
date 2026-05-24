@@ -67,4 +67,9 @@ export interface Booking {
   discount?: number;
   extraStayCharges?: number;
   checkedOutAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  createdBy?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  };
 }

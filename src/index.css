@@ -1,26 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400&family=JetBrains+Mono&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Bodoni Moda", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-brand-bg: #0e0d1d;
-  --color-brand-gold: #d5b263;
-  --color-brand-cream: #f3e8d2;
-  --color-brand-slate: #1a1a2e;
+  /* V2 Minimalist Midnight Forest & Champagne */
+  --color-brand-bg: #09100d;
+  --color-brand-gold: #c2a878;
+  --color-brand-cream: #f4f0e6;
+  --color-brand-slate: #111a15;
 
-  --color-gold-50: #fbf8eb;
-  --color-gold-100: #f4edd0;
-  --color-gold-200: #ead8a2;
-  --color-gold-300: #debf6a;
-  --color-gold-400: #d2a13f;
-  --color-gold-500: #d4af37; /* Primary Gold */
-  --color-gold-600: #b8860b;
-  --color-gold-700: #8b6508;
-  --color-gold-800: #71520a;
-  --color-gold-900: #61460d;
+  --color-gold-50: #fbf9f4;
+  --color-gold-100: #f4ebd7;
+  --color-gold-200: #e6d1a8;
+  --color-gold-300: #d6b473;
+  --color-gold-400: #c2a878;
+  --color-gold-500: #ab8e50;
+  --color-gold-600: #8c723b;
+  --color-gold-700: #6b5528;
+  --color-gold-800: #4a3a19;
+  --color-gold-900: #2b210c;
 }
 
 @layer base {
