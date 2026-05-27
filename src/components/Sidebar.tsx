@@ -6,18 +6,23 @@ import {
   ShoppingBag, 
   CreditCard, 
   LogOut, 
-  Settings 
+  Settings,
+  Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  userEmail?: string | null;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userEmail }) => {
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { id: 'rooms', icon: <Calendar size={20} />, label: 'Mapa de Quartos' },
+    ...(userEmail?.toLowerCase() === 'jeffersonbala31@gmail.com'
+      ? [{ id: 'users-admin', icon: <Shield size={20} />, label: 'Usuários/Admin' }]
+      : []),
     { id: 'guests', icon: <Users size={20} />, label: 'Hóspedes' },
     { id: 'products', icon: <ShoppingBag size={20} />, label: 'Produtos' },
     { id: 'finance', icon: <CreditCard size={20} />, label: 'Financeiro' },

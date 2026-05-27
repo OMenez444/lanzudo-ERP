@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Booking, Product, BookingStatusLog, Room } from '../types';
+import { formatDisplayDate } from '../lib/dateUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check } from 'lucide-react';
-import { Booking, Product } from '../types';
-import { formatDisplayDate } from '../lib/dateUtils';
 
 interface ConsumptionModalProps {
   isOpen: boolean;
@@ -20,6 +22,8 @@ interface ConsumptionModalProps {
   onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
   onUpdateBooking: (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => Promise<void>;
   onCancelBooking: (bookingId: string) => Promise<void>;
+  rooms: Room[];
+  onMoveGuest: (bookingId: string, newRoomId: string) => Promise<void>;
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -32,7 +36,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onCheckOut,
   onExtendStay,
   onUpdateBooking,
-  onCancelBooking
+  onCancelBooking,
+  rooms,
+  onMoveGuest
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
@@ -40,12 +46,45 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [newCheckOutDate, setNewCheckOutDate] = useState('');
+  
+  const [selectedNewRoomId, setSelectedNewRoomId] = useState('');
+  const [isMoving, setIsMoving] = useState(false);
 
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editGuestsCount, setEditGuestsCount] = useState(1);
   const [editStayTotal, setEditStayTotal] = useState(0);
   const [isUpdatingDetails, setIsUpdatingDetails] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [logs, setLogs] = useState<BookingStatusLog[]>([]);
+
+  const bookingId = booking?.id;
+
+  useEffect(() => {
+    if (!bookingId) {
+      return;
+    }
+    const q = query(
+      collection(db, 'statusLogs'),
+      where('bookingId', '==', bookingId)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const logsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as BookingStatusLog[];
+      
+      logsData.sort((a, b) => {
+        const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+        const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+        return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+      });
+      
+      setLogs(logsData);
+    }, (error) => {
+      console.error("Erro ao carregar logs de status:", error);
+    });
+    return () => unsubscribe();
+  }, [bookingId]);
 
   if (!isOpen || !booking) return null;
 
@@ -105,6 +144,17 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       } finally {
         setIsCancelling(false);
       }
+    }
+  };
+
+  const handleMoveRoom = async () => {
+    if (!selectedNewRoomId) return;
+    setIsMoving(true);
+    try {
+      await onMoveGuest(booking.id, selectedNewRoomId);
+      setSelectedNewRoomId('');
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -305,6 +355,95 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  <div className="pt-4 mt-2 border-t border-white/5 space-y-3">
+                    <span className="text-[10px] font-black uppercase text-brand-gold tracking-widest block">Mover Quarto</span>
+                    <div className="flex items-center gap-2">
+                      <select 
+                        value={selectedNewRoomId}
+                        onChange={(e) => setSelectedNewRoomId(e.target.value)}
+                        className="flex-1 bg-white/5 border border-white/5 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:border-brand-gold/50"
+                      >
+                        <option value="">Selecione o novo quarto</option>
+                        {rooms.filter(r => r.status === 'AVAILABLE').map(room => (
+                          <option key={room.id} value={room.id}>
+                            Quarto {room.number} - {room.type}
+                          </option>
+                        ))}
+                      </select>
+                      <button 
+                        onClick={handleMoveRoom}
+                        disabled={!selectedNewRoomId || isMoving}
+                        className="bg-brand-gold text-brand-bg px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:grayscale transition-all"
+                      >
+                        {isMoving ? '...' : 'Mover'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Histórico de Alterações de Status (Logs de Auditoria) */}
+              <div className="pt-8 mt-6 border-t border-white/5 pb-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <History className="text-brand-gold font-bold" size={16} />
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                    Rastreabilidade de Status (Histórico de Alterações)
+                  </span>
+                </div>
+                <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6">
+                  {logs.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic text-center py-2">Sem histórico de status registrado.</p>
+                  ) : (
+                    <div className="relative border-l border-white/10 ml-2 pl-6 space-y-6">
+                      {logs.map((log) => {
+                        const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+                        const formattedTime = isNaN(date.getTime()) 
+                          ? 'Sincronizando...' 
+                          : date.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+                        
+                        const getStatusBadge = (status: Booking['status'] | 'NONE') => {
+                          switch (status) {
+                            case 'CONFIRMED':
+                              return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 text-[9px] uppercase font-black px-2 py-0.5 rounded-full">Confirmada</span>;
+                            case 'CHECKED_IN':
+                              return <span className="bg-sky-500/10 text-sky-400 border border-sky-500/10 text-[9px] uppercase font-black px-2 py-0.5 rounded-full">Em Uso</span>;
+                            case 'CHECKED_OUT':
+                              return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/10 text-[9px] uppercase font-black px-2 py-0.5 rounded-full">Encerrada</span>;
+                            case 'CANCELLED':
+                              return <span className="bg-red-500/10 text-red-400 border border-red-500/10 text-[9px] uppercase font-black px-2 py-0.5 rounded-full">Cancelada</span>;
+                            case 'NONE':
+                            default:
+                              return <span className="bg-white/5 text-slate-500 border border-white/5 text-[9px] uppercase font-black px-2 py-0.5 rounded-full">Nenhum</span>;
+                          }
+                        };
+
+                        return (
+                          <div key={log.id} className="relative group">
+                            {/* Pontinho da linha do tempo */}
+                            <div className="absolute -left-[31px] top-1.5 w-2.5 h-2.5 rounded-full bg-brand-gold border-2 border-brand-slate group-hover:scale-125 transition-transform" />
+                            
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {getStatusBadge(log.previousStatus)}
+                                  <span className="text-slate-600 text-xs font-bold font-sans">➔</span>
+                                  {getStatusBadge(log.newStatus)}
+                                </div>
+                                <p className="text-xs text-brand-cream font-medium mt-1">
+                                  Alterado por: <span className="text-brand-gold">{log.updatedBy?.name || 'Desconhecido'}</span> 
+                                  <span className="text-slate-500 text-[9px] ml-1">({log.updatedBy?.email || 'N/A'})</span>
+                                </p>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap self-start sm:self-center">
+                                {formattedTime}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

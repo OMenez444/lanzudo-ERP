@@ -32,6 +32,10 @@ service cloud.firestore {
       return isEmailVerified() && exists(/databases/$(database)/documents/staff/$(request.auth.uid));
     }
 
+    match /{path=**}/statusLogs/{logId} {
+      allow read, write: if true;
+    }
+
     // --- Entity Validations ---
 
     function isValidGuest(data) {
@@ -65,9 +69,17 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
       allow read, write: if true;
+
+      match /statusLogs/{logId} {
+        allow read, write: if true;
+      }
     }
 
     match /products/{productId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
       allow read, write: if true;
     }
   }

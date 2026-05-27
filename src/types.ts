@@ -73,3 +73,29 @@ export interface Booking {
     name: string | null;
   };
 }
+
+export interface AppUser {
+  id: string;
+  uid: string;
+  email: string | null;
+  name: string | null;
+  role: 'ADMIN' | 'RECEPTIONIST';
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt?: unknown;
+}
+
+export interface BookingStatusLog {
+  id: string;
+  bookingId: string;
+  roomId?: string;
+  previousStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED' | 'NONE';
+  newStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+  updatedBy: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  };
+  timestamp: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
+

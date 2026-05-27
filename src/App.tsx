@@ -12,7 +12,9 @@ import {
   LogOut,
   Edit2,
   Trash2,
-  Download
+  Download,
+  Lock,
+  History
 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { RoomCard } from './components/RoomCard';
@@ -25,7 +27,7 @@ import { AddProductModal } from './components/AddProductModal';
 import { ConsumptionModal } from './components/ConsumptionModal';
 import { AddGuestModal } from './components/AddGuestModal';
 import { PaymentModal } from './components/PaymentModal';
-import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod } from './types';
+import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod, AppUser, BookingStatusLog } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   collection, 
@@ -37,10 +39,14 @@ import {
   query, 
   orderBy,
   serverTimestamp,
-  deleteDoc
+  deleteDoc,
+  getDoc,
+  getDocs,
+  setDoc,
+  Timestamp
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { db, handleFirestoreError, OperationType, auth, signInWithGoogle } from './lib/firebase';
+import { db, handleFirestoreError, OperationType, auth, signInWithGoogle, createCollaborator } from './lib/firebase';
 import { getLocalDateString } from './lib/dateUtils';
 
 export default function App() {
@@ -68,10 +74,91 @@ export default function App() {
   const [displayName, setDisplayName] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [currentUserProfile, setCurrentUserProfile] = useState<AppUser | null>(null);
+  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [adminSubTab, setAdminSubTab] = useState<'users' | 'logs'>('users');
+  const [allStatusLogs, setAllStatusLogs] = useState<BookingStatusLog[]>([]);
+  const [logDateFilter, setLogDateFilter] = useState('');
+  const [logsError, setLogsError] = useState('');
+
+  const handleGenerateMockLogs = async () => {
+    if (rooms.length === 0) {
+      setLogsError("Para gerar os logs de teste, você precisa criar ao menos 1 quarto antes.");
+      return;
+    }
+    setLogsError("");
+    
+    try {
+      // Remover mocks anteriores
+      const qMocks = query(collection(db, 'statusLogs'));
+      const snapshotMocks = await getDocs(qMocks);
+      const batchDelete = writeBatch(db);
+      snapshotMocks.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.updatedBy?.uid?.includes('mock') || data.updatedBy?.uid === 'hotel-lanzudos') {
+          batchDelete.delete(docSnap.ref);
+        }
+      });
+      await batchDelete.commit();
+
+      const batch = writeBatch(db);
+      const mockLogs = [
+        { prev: 'CHECKED_IN' as const, curr: 'CHECKED_OUT' as const, time: '2026-05-22T09:00:15', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'CONFIRMED' as const, curr: 'CHECKED_IN' as const, time: '2026-05-22T09:02:30', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'NONE' as const, curr: 'CONFIRMED' as const, time: '2026-05-22T09:05:45', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'CHECKED_IN' as const, curr: 'CHECKED_OUT' as const, time: '2026-05-22T09:08:12', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'CONFIRMED' as const, curr: 'CANCELLED' as const, time: '2026-05-22T09:10:05', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'CONFIRMED' as const, curr: 'CHECKED_IN' as const, time: '2026-05-22T09:13:20', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+        { prev: 'CHECKED_IN' as const, curr: 'CHECKED_OUT' as const, time: '2026-05-22T09:15:00', user: { name: 'Hotel Lanzudos', email: '-', uid: 'hotel-lanzudos' } },
+      ];
+      let rIndex = 0;
+      for (const log of mockLogs) {
+        const randomRoom = rooms[Math.floor(Math.random() * rooms.length)];
+        const bId = `mock-booking-${Date.now()}-${rIndex}`;
+        rIndex++;
+        const logRef = doc(collection(db, 'statusLogs'));
+        batch.set(logRef, {
+          id: logRef.id,
+          bookingId: bId,
+          roomId: randomRoom.id,
+          previousStatus: log.prev,
+          newStatus: log.curr,
+          updatedBy: log.user,
+          timestamp: Timestamp.fromDate(new Date(log.time))
+        });
+      }
+      await batch.commit();
+      setLogDateFilter('2026-05-22');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      setLogsError("Erro ao gerar logs mock: " + msg);
+    }
+  };
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const userRef = doc(db, 'users', currentUser.uid);
+        const docSnap = await getDoc(userRef);
+        if (!docSnap.exists()) {
+          const newProfile: AppUser = {
+            id: currentUser.uid,
+            uid: currentUser.uid,
+            email: currentUser.email,
+            name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Desconhecido',
+            role: 'ADMIN', // default first user or anyone to Admin role initially for user management
+            status: 'ACTIVE'
+          };
+          await setDoc(userRef, newProfile);
+          setCurrentUserProfile(newProfile);
+        } else {
+          setCurrentUserProfile({ id: docSnap.id, ...docSnap.data() } as AppUser);
+        }
+      } else {
+        setCurrentUserProfile(null);
+        setAppUsers([]);
+      }
     });
 
     return () => unsubscribeAuth();
@@ -147,6 +234,54 @@ export default function App() {
     return () => unsubscribeGuests();
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const q = query(collection(db, 'users'));
+    const unsubscribeUsers = onSnapshot(q, (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AppUser[];
+      setAppUsers(usersData);
+    }, (error) => {
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      }
+    });
+
+    return () => unsubscribeUsers();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.email?.toLowerCase() !== 'jeffersonbala31@gmail.com') {
+      return;
+    }
+    const q = query(collection(db, 'statusLogs'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const logsData = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      })) as BookingStatusLog[];
+      
+      logsData.sort((a, b) => {
+        const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+        const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+        return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+      });
+      setAllStatusLogs(logsData);
+      setLogsError('');
+    }, (error) => {
+      setLogsError(error.message || 'Erro desconhecido ao carregar logs.');
+      if (error.code !== 'permission-denied') {
+        console.error("Erro ao carregar logs globais de auditoria:", error);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   const occupancyRate = rooms.length > 0 ? Math.round((rooms.filter(r => r.status === 'OCCUPIED').length / rooms.length) * 100) : 0;
   const occupiedRooms = rooms.filter(r => r.status === 'OCCUPIED').length;
   const checkinsToday = bookings.filter(b => {
@@ -216,6 +351,21 @@ export default function App() {
         discount: discount,
         paymentMethod: method,
         checkedOutAt: serverTimestamp()
+      });
+
+      // 3. Log the status action
+      const logRef = doc(collection(db, 'statusLogs'));
+      batch.set(logRef, {
+        id: logRef.id,
+        bookingId: activeBooking.id,
+        previousStatus: activeBooking.status || 'CONFIRMED',
+        newStatus: 'CHECKED_OUT',
+        updatedBy: user ? {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
+        timestamp: serverTimestamp()
       });
 
       await batch.commit();
@@ -398,6 +548,21 @@ export default function App() {
         cancelledAt: serverTimestamp()
       });
 
+      // Log the status action
+      const logRef = doc(collection(db, 'statusLogs'));
+      batch.set(logRef, {
+        id: logRef.id,
+        bookingId: bookingId,
+        previousStatus: booking.status || 'CONFIRMED',
+        newStatus: 'CANCELLED',
+        updatedBy: user ? {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
+        timestamp: serverTimestamp()
+      });
+
       batch.update(doc(db, 'rooms', booking.roomId), {
         status: 'AVAILABLE',
         guest: null
@@ -414,12 +579,124 @@ export default function App() {
     }
   };
 
+  const handleMoveGuest = async (bookingId: string, newRoomId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    try {
+      const oldRoomId = booking.roomId;
+      
+      const batch = writeBatch(db);
+      
+      // Atualizar a Reserva para o novo quarto
+      batch.update(doc(db, 'bookings', bookingId), { roomId: newRoomId });
+      
+      // Antigo quarto para CLEANING
+      batch.update(doc(db, 'rooms', oldRoomId), {
+        status: 'CLEANING',
+        guest: null
+      });
+      
+      // Novo quarto para OCCUPIED
+      batch.update(doc(db, 'rooms', newRoomId), {
+        status: 'OCCUPIED',
+        guest: booking.guestName
+      });
+      
+      await batch.commit();
+      
+      // Confirm UI changes
+      if (selectedBooking?.id === bookingId) {
+        setIsConsumptionModalOpen(false);
+        setSelectedBooking(null);
+      }
+    } catch (error) {
+       handleFirestoreError(error, OperationType.UPDATE, `bookings/${bookingId}`);
+    }
+  };
+
   const handleDeleteBooking = async (bookingId: string) => {
     if (window.confirm("Certeza que deseja excluir permanentemente este registro financeiro?")) {
       try {
         await deleteDoc(doc(db, 'bookings', bookingId));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `bookings/${bookingId}`);
+      }
+    }
+  };
+
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserRole, setEditUserRole] = useState<'ADMIN' | 'RECEPTIONIST'>('RECEPTIONIST');
+  const [editUserStatus, setEditUserStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [createUserName, setCreateUserName] = useState('');
+  const [createUserEmail, setCreateUserEmail] = useState('');
+  const [createUserPassword, setCreateUserPassword] = useState('');
+  const [createUserRole, setCreateUserRole] = useState<'ADMIN' | 'RECEPTIONIST'>('RECEPTIONIST');
+  const [createUserError, setCreateUserError] = useState('');
+  const [isCreatingCollaborator, setIsCreatingCollaborator] = useState(false);
+
+  const handleCreateCollaboratorSubmit = async () => {
+    if (!createUserName || !createUserEmail || !createUserPassword) {
+      setCreateUserError('Por favor, preencha todos os campos.');
+      return;
+    }
+    if (createUserPassword.length < 6) {
+      setCreateUserError('A senha deve conter pelo menos 6 caracteres.');
+      return;
+    }
+    setCreateUserError('');
+    setIsCreatingCollaborator(true);
+    try {
+      await createCollaborator(createUserEmail, createUserPassword, createUserName, createUserRole);
+      setCreateUserName('');
+      setCreateUserEmail('');
+      setCreateUserPassword('');
+      setCreateUserRole('RECEPTIONIST');
+      setIsCreateUserModalOpen(false);
+    } catch (err) {
+      const error = err as Error;
+      setCreateUserError(error.message || 'Erro ao criar colaborador.');
+    } finally {
+      setIsCreatingCollaborator(false);
+    }
+  };
+
+  const handleOpenEditUser = (u: AppUser) => {
+    setEditingUser(u);
+    setEditUserName(u.name || '');
+    setEditUserRole(u.role || 'RECEPTIONIST');
+    setEditUserStatus(u.status || 'ACTIVE');
+    setIsEditUserModalOpen(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    try {
+      await updateDoc(doc(db, 'users', editingUser.id), {
+        name: editUserName,
+        role: editUserRole,
+        status: editUserStatus
+      });
+      setIsEditUserModalOpen(false);
+      setEditingUser(null);
+    } catch (err) {
+      const error = err as Error;
+      console.error("Erro ao atualizar colaborador", error);
+      alert("Erro ao atualizar o colaborador.");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm("Deseja realmente remover este colaborador do sistema?")) {
+      try {
+        await deleteDoc(doc(db, 'users', userId));
+      } catch (err) {
+        const error = err as Error;
+        console.error("Erro ao deletar usuário", error);
       }
     }
   };
@@ -515,6 +792,21 @@ export default function App() {
           email: user.email,
           name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
         } : undefined
+      });
+
+      // Log the initial status action
+      const logRef = doc(collection(db, 'statusLogs'));
+      batch.set(logRef, {
+        id: logRef.id,
+        bookingId: bookingRef.id,
+        previousStatus: 'NONE',
+        newStatus: 'CONFIRMED',
+        updatedBy: user ? {
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
+        timestamp: serverTimestamp()
       });
 
       batch.update(doc(db, 'rooms', data.roomId), {
@@ -651,9 +943,38 @@ export default function App() {
     );
   }
 
+  if (currentUserProfile?.status === 'INACTIVE') {
+    return (
+      <div className="h-screen bg-brand-bg flex items-center justify-center p-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md p-12 bg-brand-slate border border-white/5 rounded-[40px] shadow-2xl space-y-6"
+        >
+          <div className="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto border border-red-500/10">
+            <Lock size={28} />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-serif text-brand-gold">Acesso Bloqueado</h1>
+            <p className="text-xs text-slate-500 uppercase tracking-widest font-black">Lanzudo's Hotel Experience</p>
+          </div>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Seu acesso de colaborador está inativo ou aguardando liberação de privilégios. Por favor, entre em contato com o administrador do sistema.
+          </p>
+          <button
+            onClick={() => signOut(auth)}
+            className="w-full border border-white/10 hover:bg-white/5 text-slate-400 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs transition-all animate-pulse-subtle"
+          >
+            Sair e trocar de conta
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-brand-bg text-slate-200 overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user?.email} />
 
       <main className="flex-1 overflow-y-auto p-6 lg:p-12">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -662,7 +983,8 @@ export default function App() {
               {activeTab === 'dashboard' ? 'Painel Executivo' : 
                activeTab === 'rooms' ? 'Mapa de Unidades' : 
                activeTab === 'guests' ? 'Base de Hóspedes' : 
-               activeTab === 'products' ? 'Catálogo de Produtos' : 'Financeiro'}
+               activeTab === 'products' ? 'Catálogo de Produtos' : 
+               activeTab === 'users-admin' ? 'Controle de Colaboradores' : 'Financeiro'}
             </h2>
             <p className="text-slate-500 italic">"Excelência em cada detalhe da hospitalidade."</p>
           </div>
@@ -688,9 +1010,11 @@ export default function App() {
               )}
               <div className="flex flex-col items-start pr-2">
                 <span className="text-[10px] font-black text-brand-gold uppercase tracking-tighter leading-none mb-0.5">
-                  {user?.displayName || 'Colaborador'}
+                  {currentUserProfile?.name || user?.displayName || 'Colaborador'}
                 </span>
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none">Gerente</span>
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-none">
+                  {currentUserProfile?.role === 'ADMIN' ? 'Administrador' : 'Recepcionista'}
+                </span>
               </div>
               
               <button 
@@ -1108,6 +1432,300 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'users-admin' && user?.email?.toLowerCase() === 'jeffersonbala31@gmail.com' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-brand-slate border border-white/5 p-6 rounded-3xl">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Total de Colaboradores</p>
+                <p className="text-3xl font-serif text-brand-gold">{appUsers.length}</p>
+              </div>
+              <div className="bg-brand-slate border border-white/5 p-6 rounded-3xl">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Colaboradores Ativos</p>
+                <p className="text-3xl font-serif text-emerald-500">{appUsers.filter(u => u.status === 'ACTIVE').length}</p>
+              </div>
+              <div className="bg-brand-slate border border-white/5 p-6 rounded-3xl">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Contas Administrativas</p>
+                <p className="text-3xl font-serif text-sky-400">{appUsers.filter(u => u.role === 'ADMIN').length}</p>
+              </div>
+            </div>
+
+            {/* Sub-tab Navigation */}
+            <div className="flex border-b border-white/5 pb-1 gap-6">
+              <button
+                onClick={() => setAdminSubTab('users')}
+                className={`pb-4 px-2 text-sm font-serif relative transition-all ${
+                  adminSubTab === 'users' 
+                    ? 'text-brand-gold font-bold' 
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                Colaboradores
+                {adminSubTab === 'users' && (
+                  <motion.div 
+                    layoutId="adminSubTabUnderline" 
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-gold" 
+                  />
+                )}
+              </button>
+              <button
+                onClick={() => setAdminSubTab('logs')}
+                className={`pb-4 px-2 text-sm font-serif relative transition-all ${
+                  adminSubTab === 'logs' 
+                    ? 'text-brand-gold font-bold' 
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                Auditoria de Status de Reservas
+                {adminSubTab === 'logs' && (
+                  <motion.div 
+                    layoutId="adminSubTabUnderline" 
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-gold" 
+                  />
+                )}
+              </button>
+            </div>
+
+            {adminSubTab === 'users' ? (
+              <div className="space-y-8">
+                {/* Explanatory callout banner */}
+                <div className="bg-brand-gold/5 border border-brand-gold/10 p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div>
+                    <h4 className="font-serif text-brand-gold text-lg mb-1">Como integrar novos colaboradores?</h4>
+                    <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
+                      Para conceder acesso ao sistema a um novo recepcionista, peça para ele criar uma nova conta com e-mail e senha diretamente na tela de autenticação inicial. O perfil aparecerá de forma segura e instantânea na lista abaixo para liberação e edição.
+                    </p>
+                  </div>
+                  <div className="bg-brand-gold/10 px-4 py-2 rounded-xl text-[10px] tracking-widest uppercase font-black text-brand-gold shrink-0">
+                    PROCESSO DE CONTRATAÇÃO
+                  </div>
+                </div>
+
+                {/* Users Table */}
+                <div className="bg-brand-slate rounded-3xl p-8 border border-white/5">
+                  <div className="flex justify-between items-center mb-8">
+                    <div>
+                      <h3 className="text-2xl font-serif text-brand-cream">Registros de Acesso</h3>
+                      <span className="text-xs text-slate-500">Controle e rastreabilidade de transações</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCreateUserError('');
+                        setIsCreateUserModalOpen(true);
+                      }}
+                      className="bg-brand-gold text-brand-bg px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-gold/10 hover:scale-105 transition-all"
+                    >
+                      Novo Colaborador
+                    </button>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">
+                          <th className="font-black py-4 px-4 whitespace-nowrap">Colaborador</th>
+                          <th className="font-black py-4 px-4 whitespace-nowrap">E-mail de Acesso</th>
+                          <th className="font-black py-4 px-4 whitespace-nowrap">Cargo / Permissão</th>
+                          <th className="font-black py-4 px-4 whitespace-nowrap">Status</th>
+                          <th className="font-black py-4 px-4 text-right whitespace-nowrap">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {appUsers.map((u) => (
+                          <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group align-middle">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-brand-gold/10 text-brand-gold flex items-center justify-center font-bold text-xs uppercase border border-brand-gold/10">
+                                  {u.name?.charAt(0) || 'U'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-brand-cream">{u.name || 'Sem nome'}</p>
+                                  <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">{u.uid === user?.uid ? 'Sua sessão atual' : 'ID: ' + u.uid.substring(0, 8)}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-sm text-slate-400">
+                              {u.email}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={`text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-full ${
+                                u.role === 'ADMIN' 
+                                  ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' 
+                                  : 'bg-brand-gold/10 text-brand-gold border border-brand-gold/10'
+                              }`}>
+                                {u.role === 'ADMIN' ? 'Administrador' : 'Recepcionista'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${u.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-red-400'}`}></span>
+                                <span className="text-xs text-slate-400">{u.status === 'ACTIVE' ? 'Ativo' : 'Suspenso / Inativo'}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleOpenEditUser(u)}
+                                  className="p-2 bg-white/5 hover:bg-brand-gold hover:text-brand-bg text-brand-cream rounded-xl transition-all"
+                                  title="Editar Perfil"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(u.id)}
+                                  disabled={u.uid === user?.uid}
+                                  className={`p-2 rounded-xl transition-all ${
+                                    u.uid === user?.uid 
+                                      ? 'text-slate-700 bg-white/[0.01] cursor-not-allowed' 
+                                      : 'bg-white/5 text-slate-400 hover:bg-red-400 hover:text-white'
+                                  }`}
+                                  title={u.uid === user?.uid ? "Você não pode excluir sua própria conta" : "Remover Usuário"}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {appUsers.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="py-20 text-center text-slate-600 italic">
+                              Nenhum colaborador registrado.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-brand-slate rounded-3xl p-8 border border-white/5 space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="text-2.5xl font-serif text-brand-cream flex items-center gap-2">
+                      <History className="text-brand-gold" size={24} />
+                      Logs Globais de Status
+                    </h3>
+                    <span className="text-xs text-slate-500">Rastreamento e auditoria em tempo real de cada ciclo de hospedagem</span>
+                    {logsError && (
+                      <p className="mt-2 text-xs text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20">{logsError}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-end gap-3">
+                    <div className="flex flex-col items-start space-y-1">
+                      <label className="text-[10px] uppercase font-black tracking-widest text-slate-500">Filtrar por Data</label>
+                      <input
+                        type="date"
+                        value={logDateFilter}
+                        onChange={(e) => setLogDateFilter(e.target.value)}
+                        className="bg-white/5 border border-white/10 text-brand-cream rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-brand-gold/50 transition-colors"
+                      />
+                    </div>
+                    <button
+                      onClick={handleGenerateMockLogs}
+                      className="bg-brand-gold/10 hover:bg-brand-gold/20 text-brand-gold px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors h-[38px]"
+                    >
+                      Gerar Logs Dia 22/05
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">
+                        <th className="font-black py-4 px-4 whitespace-nowrap">Data / Hora</th>
+                        <th className="font-black py-4 px-4 whitespace-nowrap">Quarto</th>
+                        <th className="font-black py-4 px-4 whitespace-nowrap">Mudança de Status</th>
+                        <th className="font-black py-4 px-4 whitespace-nowrap">Operador</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allStatusLogs.filter(log => {
+                        if (!logDateFilter) return true;
+                        const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+                        if (isNaN(date.getTime())) return false;
+                        
+                        // Local time match - format is YYYY-MM-DD
+                        const pad = (n: number) => n.toString().padStart(2, '0');
+                        const logDateString = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+                        return logDateString === logDateFilter;
+                      }).map((log) => {
+                        const booking = bookings.find(b => b.id === log.bookingId);
+                        const roomId = log.roomId || booking?.roomId;
+                        const room = rooms.find(r => r.id === roomId);
+                        
+                        const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+                        const formattedTime = isNaN(date.getTime()) 
+                          ? 'Sincronizando...' 
+                          : date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                        const getStatusBadge = (status: Booking['status'] | 'NONE') => {
+                          switch (status) {
+                            case 'CONFIRMED':
+                              return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 text-[9px] uppercase font-black px-2 py-0.5 rounded-full inline-block">Confirmada</span>;
+                            case 'CHECKED_IN':
+                              return <span className="bg-sky-500/10 text-sky-400 border border-sky-500/15 text-[9px] uppercase font-black px-2 py-0.5 rounded-full inline-block">Em Uso</span>;
+                            case 'CHECKED_OUT':
+                              return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/15 text-[9px] uppercase font-black px-2 py-0.5 rounded-full inline-block">Encerrada</span>;
+                            case 'CANCELLED':
+                              return <span className="bg-red-500/10 text-red-400 border border-red-500/15 text-[9px] uppercase font-black px-2 py-0.5 rounded-full inline-block">Cancelada</span>;
+                            case 'NONE':
+                            default:
+                              return <span className="bg-white/5 text-slate-500 border border-white/5 text-[9px] uppercase font-black px-2 py-0.5 rounded-full inline-block">Nenhum</span>;
+                          }
+                        };
+
+                        return (
+                          <tr key={log.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group align-middle text-sm">
+                            <td className="py-4 px-4 font-mono text-xs text-slate-400">
+                              {formattedTime}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="font-mono text-xs text-brand-gold bg-brand-gold/5 border border-brand-gold/10 px-2.5 py-1 rounded">
+                                Quarto {room?.number || '-'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {getStatusBadge(log.previousStatus)}
+                                <span className="text-slate-600 text-xs font-bold leading-none">➔</span>
+                                {getStatusBadge(log.newStatus)}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="text-xs font-bold text-slate-300 capitalize">{log.updatedBy?.name || 'Sistema'}</p>
+                              <p className="text-[10px] text-slate-500 lowercase">{log.updatedBy?.email || '-'}</p>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {allStatusLogs.filter(log => {
+                        if (!logDateFilter) return true;
+                        const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+                        if (isNaN(date.getTime())) return false;
+                        const pad = (n: number) => n.toString().padStart(2, '0');
+                        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` === logDateFilter;
+                      }).length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="py-20 text-center text-slate-600 text-sm italic">
+                            Sem logs de auditoria registrados para a data selecionada.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {isBookingModalOpen && (
           <BookingModal 
             isOpen={isBookingModalOpen} 
@@ -1164,6 +1782,8 @@ export default function App() {
           onExtendStay={handleExtendStay}
           onUpdateBooking={handleUpdateBooking}
           onCancelBooking={handleCancelBooking}
+          rooms={rooms}
+          onMoveGuest={handleMoveGuest}
         />
 
         <AddGuestModal
@@ -1183,6 +1803,171 @@ export default function App() {
           room={selectedRoom}
           onConfirm={handleConfirmPayment}
         />
+
+        {isEditUserModalOpen && editingUser && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-brand-slate border border-white/5 rounded-[40px] w-full max-w-lg p-10 relative overflow-hidden"
+            >
+              <div className="mb-8">
+                <h3 className="text-2xl font-serif text-brand-gold">Editar Colaborador</h3>
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mt-1">Configurar credenciais e acessos</p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Nome Completo</label>
+                  <input
+                    type="text"
+                    value={editUserName}
+                    onChange={(e) => setEditUserName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Cargo / Nível de Permissão</label>
+                  <select
+                    value={editUserRole}
+                    onChange={(e) => setEditUserRole(e.target.value as 'ADMIN' | 'RECEPTIONIST')}
+                    className="w-full bg-[#121214] border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                  >
+                    <option value="RECEPTIONIST">Recepcionista (Acesso Geral)</option>
+                    <option value="ADMIN">Administrador (Controle Total)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Status da Conta</label>
+                  <select
+                    value={editUserStatus}
+                    onChange={(e) => setEditUserStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
+                    className="w-full bg-[#121214] border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                  >
+                    <option value="ACTIVE">Ativo / Liberado</option>
+                    <option value="INACTIVE">Suspenso / Bloqueado</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-4 pt-4 border-t border-white/5">
+                  <button
+                    onClick={() => {
+                      setIsEditUserModalOpen(false);
+                      setEditingUser(null);
+                    }}
+                    className="flex-1 bg-white/5 hover:bg-white/10 text-brand-cream py-4 rounded-2xl text-xs font-bold tracking-widest uppercase transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveUser}
+                    className="flex-1 bg-brand-gold hover:bg-brand-gold/80 text-brand-bg py-4 rounded-2xl text-xs font-bold tracking-widest uppercase transition-all shadow-lg shadow-brand-gold/10"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isCreateUserModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-brand-slate border border-white/5 rounded-[40px] w-full max-w-lg p-10 relative overflow-hidden"
+            >
+              <div className="mb-8">
+                <h3 className="text-2xl font-serif text-brand-gold">Cadastrar Novo Colaborador</h3>
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mt-1">Registrar credenciais institucionais</p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Nome Completo</label>
+                  <input
+                    type="text"
+                    value={createUserName}
+                    onChange={(e) => setCreateUserName(e.target.value)}
+                    placeholder="Ex: Maria Oliveira"
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Email de Acesso</label>
+                  <input
+                    type="email"
+                    value={createUserEmail}
+                    onChange={(e) => setCreateUserEmail(e.target.value)}
+                    placeholder="maria@lanzudos.com"
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Senha Provisória</label>
+                  <input
+                    type="password"
+                    value={createUserPassword}
+                    onChange={(e) => setCreateUserPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Cargo / Nível de Permissão</label>
+                  <select
+                    value={createUserRole}
+                    onChange={(e) => setCreateUserRole(e.target.value as 'ADMIN' | 'RECEPTIONIST')}
+                    className="w-full bg-[#121214] border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                  >
+                    <option value="RECEPTIONIST">Recepcionista (Acesso Geral)</option>
+                    <option value="ADMIN">Administrador (Controle Total)</option>
+                  </select>
+                </div>
+
+                {createUserError && (
+                  <p className="text-red-400 text-xs italic bg-red-400/5 border border-red-400/10 p-3 rounded-xl">
+                    {createUserError}
+                  </p>
+                )}
+
+                <div className="flex gap-4 pt-4 border-t border-white/5">
+                  <button
+                    onClick={() => {
+                      setIsCreateUserModalOpen(false);
+                      setCreateUserName('');
+                      setCreateUserEmail('');
+                      setCreateUserPassword('');
+                      setCreateUserRole('RECEPTIONIST');
+                      setCreateUserError('');
+                    }}
+                    disabled={isCreatingCollaborator}
+                    className="flex-1 bg-white/5 hover:bg-white/10 text-brand-cream py-4 rounded-2xl text-xs font-bold tracking-widest uppercase transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateCollaboratorSubmit}
+                    disabled={isCreatingCollaborator}
+                    className="flex-1 bg-brand-gold hover:bg-brand-gold/80 text-brand-bg py-4 rounded-2xl text-xs font-bold tracking-widest uppercase transition-all shadow-lg shadow-brand-gold/10 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isCreatingCollaborator ? 'Criando...' : 'Confirmar Cadastro'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </main>
     </div>
   );
