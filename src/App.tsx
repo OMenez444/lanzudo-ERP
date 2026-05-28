@@ -303,9 +303,58 @@ export default function App() {
     { label: 'Limpeza', value: cleaningCount.toString(), sub: 'Aguardando', trend: cleaningCount > 0 ? 'up' : 'down' },
   ];
 
-  const handleCheckIn = (id: string) => {
-    setSelectedRoomForBooking(id);
+  const handleOpenBookingModal = (roomId?: string) => {
+    if (guests.length === 0) {
+      alert("Não é possível realizar uma reserva sem clientes. Cadastre pelo menos um hóspede no sistema primeiro.");
+      setIsAddGuestModalOpen(true);
+      return;
+    }
+    if (roomId) setSelectedRoomForBooking(roomId);
     setIsBookingModalOpen(true);
+  };
+
+  const handleCheckIn = async (id: string) => {
+    const today = getLocalDateString();
+    const existingBooking = bookings.find(b => 
+      b.roomId === id && 
+      b.status === 'CONFIRMED' && 
+      b.checkIn <= today && 
+      b.checkOut >= today
+    );
+
+    if (existingBooking) {
+      if (window.confirm(`Encontramos uma reserva agendada para hoje para o hóspede "${existingBooking.guestName}". Deseja realizar o check-in do hóspede nesta reserva agora?`)) {
+        try {
+          const batch = writeBatch(db);
+          batch.update(doc(db, 'rooms', id), {
+            status: 'OCCUPIED',
+            guest: existingBooking.guestName
+          });
+          
+          const logRef = doc(collection(db, 'statusLogs'));
+          batch.set(logRef, {
+            id: logRef.id,
+            bookingId: existingBooking.id,
+            previousStatus: 'CONFIRMED',
+            newStatus: 'CHECKED_IN',
+            updatedBy: user ? {
+              uid: user.uid,
+              email: user.email,
+              name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+            } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
+            timestamp: serverTimestamp()
+          });
+
+          await batch.commit();
+          return;
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, `rooms/${id}`);
+          return;
+        }
+      }
+    }
+    
+    handleOpenBookingModal(id);
   };
 
   const handleCheckOut = (roomId: string) => {
@@ -809,10 +858,15 @@ export default function App() {
         timestamp: serverTimestamp()
       });
 
-      batch.update(doc(db, 'rooms', data.roomId), {
-        status: 'OCCUPIED',
-        guest: data.guestName
-      });
+      const today = getLocalDateString();
+      const isActiveToday = data.checkIn <= today && data.checkOut >= today;
+
+      if (isActiveToday) {
+        batch.update(doc(db, 'rooms', data.roomId), {
+          status: 'OCCUPIED',
+          guest: data.guestName
+        });
+      }
 
       await batch.commit();
       
@@ -1039,7 +1093,7 @@ export default function App() {
               <h3 className="text-xl font-serif text-brand-cream">Status da Operação</h3>
               <div className="flex gap-2">
                 <button 
-                  onClick={() => setIsBookingModalOpen(true)}
+                  onClick={() => handleOpenBookingModal()}
                   className="px-4 py-2 bg-brand-gold text-brand-bg rounded-xl text-xs font-bold tracking-widest flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 uppercase"
                 >
                   <Plus size={14} /> Adicionar Reserva
@@ -1209,7 +1263,7 @@ export default function App() {
                 <p className="text-sm text-slate-500">Cronograma de ocupação inspirado no fluxo Jiro/Kanban.</p>
               </div>
               <button 
-                onClick={() => setIsBookingModalOpen(true)}
+                onClick={() => handleOpenBookingModal()}
                 className="bg-gold-500 hover:bg-gold-600 text-black px-6 py-4 rounded-full text-[10px] font-black tracking-widest transition-all hover:shadow-[0_0_20px_rgba(212,175,55,0.3)]"
               >
                 AGENDAR AGORA
@@ -1220,8 +1274,7 @@ export default function App() {
               rooms={rooms} 
               bookings={bookings}
               onAddBooking={(roomId) => {
-                setSelectedRoomForBooking(roomId);
-                setIsBookingModalOpen(true);
+                handleOpenBookingModal(roomId);
               }} 
               onManageConsumption={handleManageConsumption}
             />

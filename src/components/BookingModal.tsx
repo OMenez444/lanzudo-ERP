@@ -118,20 +118,19 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <div className="space-y-4">
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
-                  <input 
-                    type="text" 
-                    list="guest-suggestions"
-                    placeholder="Nome completo do hóspede" 
-                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white"
+                  <select 
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-white appearance-none"
                     value={formData.guestName}
                     onChange={(e) => setFormData({ ...formData, guestName: e.target.value })}
                     required
-                  />
-                  <datalist id="guest-suggestions">
+                  >
+                    <option value="" disabled className="bg-brand-slate text-slate-500">Selecione o hóspede (Obrigatório Cadastro)</option>
                     {guests.map(g => (
-                      <option key={g.id} value={g.fullName} />
+                      <option key={g.id} value={g.fullName} className="bg-brand-slate">
+                        {g.fullName} {g.document ? `(${g.document})` : ''}
+                      </option>
                     ))}
-                  </datalist>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
