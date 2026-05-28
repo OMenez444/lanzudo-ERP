@@ -634,23 +634,27 @@ export default function App() {
 
     try {
       const oldRoomId = booking.roomId;
+      const oldRoomObj = rooms.find(r => r.id === oldRoomId);
+      const isCurrentlyOccupiedByThisGuest = oldRoomObj?.status === 'OCCUPIED' && oldRoomObj?.guest === booking.guestName;
       
       const batch = writeBatch(db);
       
       // Atualizar a Reserva para o novo quarto
       batch.update(doc(db, 'bookings', bookingId), { roomId: newRoomId });
       
-      // Antigo quarto para CLEANING
-      batch.update(doc(db, 'rooms', oldRoomId), {
-        status: 'CLEANING',
-        guest: null
-      });
-      
-      // Novo quarto para OCCUPIED
-      batch.update(doc(db, 'rooms', newRoomId), {
-        status: 'OCCUPIED',
-        guest: booking.guestName
-      });
+      if (isCurrentlyOccupiedByThisGuest) {
+        // Antigo quarto para CLEANING somente se estava ocupado por este hóspede
+        batch.update(doc(db, 'rooms', oldRoomId), {
+          status: 'CLEANING',
+          guest: null
+        });
+        
+        // Novo quarto para OCCUPIED somente se o hóspede já estava no quarto antigo
+        batch.update(doc(db, 'rooms', newRoomId), {
+          status: 'OCCUPIED',
+          guest: booking.guestName
+        });
+      }
       
       await batch.commit();
       
