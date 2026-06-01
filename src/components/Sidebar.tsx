@@ -14,13 +14,15 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userEmail?: string | null;
+  userRole?: 'ADMIN' | 'RECEPTIONIST' | null;
+  onLogout?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userEmail }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userEmail, userRole, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { id: 'rooms', icon: <Calendar size={20} />, label: 'Mapa de Quartos' },
-    ...(userEmail?.toLowerCase() === 'jeffersonbala31@gmail.com'
+    ...(userEmail?.toLowerCase() === 'jeffersonbala31@gmail.com' || userRole === 'ADMIN'
       ? [{ id: 'users-admin', icon: <Shield size={20} />, label: 'Usuários/Admin' }]
       : []),
     { id: 'guests', icon: <Users size={20} />, label: 'Hóspedes' },
@@ -57,9 +59,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userE
           <Settings size={18} />
           <span className="text-sm">Configurações</span>
         </button>
-        <button className="w-full flex items-center gap-4 px-6 py-3 text-slate-500 hover:text-red-400 transition-colors">
-          <LogOut size={18} /> 
-          <span className="text-sm">Sair</span>
+        <button onClick={onLogout} className="w-full flex items-center justify-between px-6 py-4 bg-slate-900/50 hover:bg-slate-800 rounded-xl group transition-all text-left">
+          <div className="flex items-center gap-3 text-slate-500 group-hover:text-red-400 transition-colors">
+            <LogOut size={18} /> 
+            <span className="text-sm font-bold">Troca de Turno</span>
+          </div>
+          <span className="text-[9px] uppercase tracking-widest text-slate-600 group-hover:text-red-400/50">Encerrar</span>
         </button>
       </div>
     </aside>

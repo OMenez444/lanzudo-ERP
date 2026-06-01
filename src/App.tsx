@@ -38,6 +38,7 @@ import {
   doc, 
   query, 
   orderBy,
+  where,
   serverTimestamp,
   deleteDoc,
   getDoc,
@@ -45,8 +46,7 @@ import {
   setDoc,
   Timestamp
 } from 'firebase/firestore';
-import { onAuthStateChanged, User, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { db, handleFirestoreError, OperationType, auth, signInWithGoogle, createCollaborator } from './lib/firebase';
+import { db, handleFirestoreError, OperationType, signInWithGoogle } from './lib/firebase';
 import { getLocalDateString } from './lib/dateUtils';
 
 export default function App() {
@@ -54,7 +54,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isEditRoomModalOpen, setIsEditRoomModalOpen] = useState(false);
   const [isEditExpModalOpen, setIsEditExpModalOpen] = useState(false);
@@ -136,32 +136,30 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const userRef = doc(db, 'users', currentUser.uid);
+    const checkLocalSession = async () => {
+      const storedUserId = localStorage.getItem('lanzudos_user_id');
+      if (storedUserId) {
+        const userRef = doc(db, 'users', storedUserId);
         const docSnap = await getDoc(userRef);
-        if (!docSnap.exists()) {
-          const newProfile: AppUser = {
-            id: currentUser.uid,
-            uid: currentUser.uid,
-            email: currentUser.email,
-            name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Desconhecido',
-            role: 'ADMIN', // default first user or anyone to Admin role initially for user management
-            status: 'ACTIVE'
-          };
-          await setDoc(userRef, newProfile);
-          setCurrentUserProfile(newProfile);
+        if (docSnap.exists()) {
+          const u = { id: docSnap.id, ...docSnap.data() } as AppUser;
+          setUser(u);
+          setCurrentUserProfile(u);
         } else {
-          setCurrentUserProfile({ id: docSnap.id, ...docSnap.data() } as AppUser);
+          localStorage.removeItem('lanzudos_user_id');
+          setUser(null);
+          setCurrentUserProfile(null);
+          setAppUsers([]);
         }
       } else {
+        setUser(null);
         setCurrentUserProfile(null);
         setAppUsers([]);
       }
-    });
+      setLoading(false);
+    };
 
-    return () => unsubscribeAuth();
+    checkLocalSession();
   }, []);
 
   useEffect(() => {
@@ -704,7 +702,17 @@ export default function App() {
     setCreateUserError('');
     setIsCreatingCollaborator(true);
     try {
-      await createCollaborator(createUserEmail, createUserPassword, createUserName, createUserRole);
+      const newUserRef = doc(collection(db, 'users'));
+      await setDoc(newUserRef, {
+        id: newUserRef.id,
+        uid: newUserRef.id,
+        email: createUserEmail,
+        password: createUserPassword, // Plaintext password for this mockup
+        name: createUserName,
+        role: createUserRole,
+        status: 'ACTIVE',
+        createdAt: serverTimestamp()
+      });
       setCreateUserName('');
       setCreateUserEmail('');
       setCreateUserPassword('');
@@ -891,18 +899,102 @@ export default function App() {
     e.preventDefault();
     setAuthError('');
     try {
-      if (isLoginMode) {
-        await signInWithEmailAndPassword(auth, email, password);
+      if (!isLoginMode) {
+        // Register local user
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', email));
+        const extSnap = await getDocs(q);
+        if (!extSnap.empty) {
+          throw new Error('E-mail já está em uso.');
+        }
+
+        const newUserRef = doc(collection(db, 'users'));
+        const newUserData = {
+          id: newUserRef.id,
+          uid: newUserRef.id,
+          email,
+          password,
+          name: displayName,
+          role: 'ADMIN', // first created user or any UI registered user defaults to Admin/Recepcionist (we can set to ADMIN for simplicity in first setup)
+          status: 'ACTIVE',
+          createdAt: serverTimestamp()
+        };
+        await setDoc(newUserRef, newUserData);
+        localStorage.setItem('lanzudos_user_id', newUserRef.id);
+        const savedUser = newUserData as unknown as AppUser;
+        setUser(savedUser);
+        setCurrentUserProfile(savedUser);
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName });
-        // Force refresh user to reflect changes
-        setUser({ ...userCredential.user, displayName });
+        // Login local user
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', email));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          throw new Error('Usuário não encontrado.');
+        }
+        
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data() as AppUser & { password?: string };
+        
+        if (userData.password !== password) {
+          throw new Error('Senha incorreta.');
+        }
+        if (userData.status === 'INACTIVE') {
+          throw new Error('Usuário inativo.');
+        }
+        
+        localStorage.setItem('lanzudos_user_id', userDoc.id);
+        setUser(userData);
+        setCurrentUserProfile(userData);
       }
     } catch (err) {
       const error = err as Error;
       setAuthError(error.message || 'Erro de autenticação');
     }
+  };
+
+  const handleGoogleAuth = async () => {
+    setAuthError('');
+    try {
+      const result = await signInWithGoogle();
+      const googleUser = result.user;
+      
+      const userRef = doc(db, 'users', googleUser.uid);
+      const docSnap = await getDoc(userRef);
+      
+      if (!docSnap.exists()) {
+        const newProfile: AppUser = {
+          id: googleUser.uid,
+          uid: googleUser.uid,
+          email: googleUser.email,
+          name: googleUser.displayName || googleUser.email?.split('@')[0] || 'Desconhecido',
+          role: 'ADMIN', // first created user or any UI registered user defaults to ADMIN
+          status: 'ACTIVE'
+        };
+        await setDoc(userRef, newProfile);
+        localStorage.setItem('lanzudos_user_id', googleUser.uid);
+        setUser(newProfile);
+        setCurrentUserProfile(newProfile);
+      } else {
+        const userData = { id: docSnap.id, ...docSnap.data() } as AppUser;
+        if (userData.status === 'INACTIVE') {
+          throw new Error('Usuário inativo.');
+        }
+        localStorage.setItem('lanzudos_user_id', googleUser.uid);
+        setUser(userData);
+        setCurrentUserProfile(userData);
+      }
+    } catch (err) {
+      const error = err as Error;
+      setAuthError(error.message || 'Erro de autenticação com Google');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('lanzudos_user_id');
+    setUser(null);
+    setCurrentUserProfile(null);
   };
 
   if (loading) {
@@ -983,7 +1075,7 @@ export default function App() {
             </form>
             
             <button 
-              onClick={signInWithGoogle}
+              onClick={handleGoogleAuth}
               className="w-full border border-white/10 hover:bg-white/5 text-white py-4 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 transition-all text-xs"
             >
               Acessar com Google Auth
@@ -1020,7 +1112,7 @@ export default function App() {
             Seu acesso de colaborador está inativo ou aguardando liberação de privilégios. Por favor, entre em contato com o administrador do sistema.
           </p>
           <button
-            onClick={() => signOut(auth)}
+            onClick={handleLogout}
             className="w-full border border-white/10 hover:bg-white/5 text-slate-400 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs transition-all animate-pulse-subtle"
           >
             Sair e trocar de conta
@@ -1032,7 +1124,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-brand-bg text-slate-200 overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user?.email} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user?.email} userRole={currentUserProfile?.role} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto p-6 lg:p-12">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -1076,7 +1168,7 @@ export default function App() {
               </div>
               
               <button 
-                onClick={() => signOut(auth)}
+                onClick={handleLogout}
                 className="ml-2 p-1.5 text-slate-600 hover:text-red-500 transition-colors"
                 title="Sair"
               >
