@@ -680,6 +680,7 @@ export default function App() {
   const [editUserName, setEditUserName] = useState('');
   const [editUserRole, setEditUserRole] = useState<'ADMIN' | 'RECEPTIONIST'>('RECEPTIONIST');
   const [editUserStatus, setEditUserStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [editUserPassword, setEditUserPassword] = useState('');
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
 
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
@@ -731,19 +732,25 @@ export default function App() {
     setEditUserName(u.name || '');
     setEditUserRole(u.role || 'RECEPTIONIST');
     setEditUserStatus(u.status || 'ACTIVE');
+    setEditUserPassword('');
     setIsEditUserModalOpen(true);
   };
 
   const handleSaveUser = async () => {
     if (!editingUser) return;
     try {
-      await updateDoc(doc(db, 'users', editingUser.id), {
+      const updateData: any = {
         name: editUserName,
         role: editUserRole,
         status: editUserStatus
-      });
+      };
+      if (editUserPassword) {
+        updateData.password = editUserPassword;
+      }
+      await updateDoc(doc(db, 'users', editingUser.id), updateData);
       setIsEditUserModalOpen(false);
       setEditingUser(null);
+      setEditUserPassword('');
     } catch (err) {
       const error = err as Error;
       console.error("Erro ao atualizar colaborador", error);
@@ -2001,11 +2008,26 @@ export default function App() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2 block">Nova Senha</label>
+                  <input
+                    type="password"
+                    value={editUserPassword}
+                    onChange={(e) => setEditUserPassword(e.target.value)}
+                    placeholder="Deixe em branco para manter a atual"
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 focus:outline-none focus:border-brand-gold/50 transition-all text-sm text-brand-cream"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    Somente preencha se desejar alterar a senha de acesso deste colaborador.
+                  </p>
+                </div>
+
                 <div className="flex gap-4 pt-4 border-t border-white/5">
                   <button
                     onClick={() => {
                       setIsEditUserModalOpen(false);
                       setEditingUser(null);
+                      setEditUserPassword('');
                     }}
                     className="flex-1 bg-white/5 hover:bg-white/10 text-brand-cream py-4 rounded-2xl text-xs font-bold tracking-widest uppercase transition-all"
                   >
