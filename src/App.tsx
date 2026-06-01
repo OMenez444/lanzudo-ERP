@@ -163,6 +163,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const updateAdminPasswordAndAccount = async () => {
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', 'jeffersonbala31@gmail.com'));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          await updateDoc(doc(db, 'users', userDoc.id), {
+            password: '230623',
+            role: 'ADMIN',
+            status: 'ACTIVE'
+          });
+          console.log('Password for jeffersonbala31@gmail.com initialized/updated in DB.');
+        } else {
+          const newUserRef = doc(collection(db, 'users'));
+          await setDoc(newUserRef, {
+            id: newUserRef.id,
+            uid: newUserRef.id,
+            email: 'jeffersonbala31@gmail.com',
+            password: '230623',
+            name: 'Jefferson Bala',
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            createdAt: serverTimestamp()
+          });
+          console.log('Created admin account for jeffersonbala31@gmail.com');
+        }
+      } catch (err) {
+        console.error('Error in updateAdminPasswordAndAccount:', err);
+      }
+    };
+    updateAdminPasswordAndAccount();
+  }, []);
+
+  useEffect(() => {
     const q = query(collection(db, 'rooms'), orderBy('number', 'asc'));
     const unsubscribeRooms = onSnapshot(q, (snapshot) => {
       const roomsData = snapshot.docs.map(doc => ({
@@ -739,7 +775,7 @@ export default function App() {
   const handleSaveUser = async () => {
     if (!editingUser) return;
     try {
-      const updateData: any = {
+      const updateData: Partial<AppUser & { password?: string }> = {
         name: editUserName,
         role: editUserRole,
         status: editUserStatus
