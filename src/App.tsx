@@ -27,6 +27,7 @@ import { AddProductModal } from './components/AddProductModal';
 import { ConsumptionModal } from './components/ConsumptionModal';
 import { AddGuestModal } from './components/AddGuestModal';
 import { PaymentModal } from './components/PaymentModal';
+import { LanChatbot } from './components/LanChatbot';
 import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod, AppUser, BookingStatusLog } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -72,7 +73,7 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [isLoginMode, setIsLoginMode] = useState(true);
+  const isLoginMode = true;
   const [authError, setAuthError] = useState('');
   const [currentUserProfile, setCurrentUserProfile] = useState<AppUser | null>(null);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
@@ -80,6 +81,9 @@ export default function App() {
   const [allStatusLogs, setAllStatusLogs] = useState<BookingStatusLog[]>([]);
   const [logDateFilter, setLogDateFilter] = useState('');
   const [logsError, setLogsError] = useState('');
+  
+  const [financeMonthFilter, setFinanceMonthFilter] = useState<number>(new Date().getMonth());
+  const [financeYearFilter, setFinanceYearFilter] = useState<number>(new Date().getFullYear());
 
   const handleGenerateMockLogs = async () => {
     if (rooms.length === 0) {
@@ -324,16 +328,40 @@ export default function App() {
     return b.checkIn === today;
   }).length;
 
+  const monthsList = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+  const currentMonthName = monthsList[new Date().getMonth()];
+
+  const getBookingFinalTotal = (b: Booking) => {
+    if (b.finalTotal !== undefined && b.finalTotal !== null) return b.finalTotal;
+    const isAirbnb = b.source === 'AIRBNB';
+    const stayTotal = isAirbnb ? (Number(b.extraStayCharges) || 0) : (Number(b.totalPrice) || 0);
+    const consumptionTotal = b.consumptions?.reduce((accC, c) => accC + (c.price * c.quantity), 0) || 0;
+    const discount = b.discount || 0;
+    return Math.max(0, stayTotal + consumptionTotal - discount);
+  };
+
   const totalRevenueValue = bookings
     .filter(b => b.status === 'CHECKED_OUT')
-    .reduce((acc, b) => acc + (b.totalPrice || 0) + (b.consumptions?.reduce((s, c) => s + (c.price * c.quantity), 0) || 0) - (b.discount || 0), 0);
+    .reduce((acc, b) => acc + getBookingFinalTotal(b), 0);
+
+  const currentMonthRevenue = bookings
+    .filter(b => b.status === 'CHECKED_OUT' && b.checkedOutAt)
+    .filter(b => {
+      const dt = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+      const now = new Date();
+      return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+    })
+    .reduce((acc, b) => acc + getBookingFinalTotal(b), 0);
 
   const cleaningCount = rooms.filter(r => r.status === 'CLEANING').length;
 
   const stats: Stat[] = [
     { label: 'Ocupação', value: `${occupancyRate}%`, sub: `${occupiedRooms} de ${rooms.length} UNIDADES`, trend: 'up' },
     { label: 'Check-ins', value: checkinsToday.toString(), sub: 'Hoje', trend: 'up' },
-    { label: 'Receita', value: `R$ ${totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Total em caixa', trend: 'up' },
+    { label: 'Receita', value: `R$ ${currentMonthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Deste mês (${currentMonthName})`, trend: 'up' },
     { label: 'Limpeza', value: cleaningCount.toString(), sub: 'Aguardando', trend: cleaningCount > 0 ? 'up' : 'down' },
   ];
 
@@ -362,7 +390,8 @@ export default function App() {
           const batch = writeBatch(db);
           batch.update(doc(db, 'rooms', id), {
             status: 'OCCUPIED',
-            guest: existingBooking.guestName
+            guest: existingBooking.guestName,
+            cleaningStartedAt: null
           });
           
           const logRef = doc(collection(db, 'statusLogs'));
@@ -424,7 +453,8 @@ export default function App() {
       // 1. Update room status to cleaning
       batch.update(doc(db, 'rooms', roomId), {
         status: 'CLEANING',
-        guest: null
+        guest: null,
+        cleaningStartedAt: serverTimestamp()
       });
 
       // 2. Update booking status to checked out
@@ -467,7 +497,8 @@ export default function App() {
   const handleRelease = async (id: string) => {
     try {
       await updateDoc(doc(db, 'rooms', id), {
-        status: 'AVAILABLE'
+        status: 'AVAILABLE',
+        cleaningStartedAt: null
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `rooms/${id}`);
@@ -476,7 +507,13 @@ export default function App() {
 
   const handleUpdateRoom = async (id: string, data: Partial<Room>) => {
     try {
-      await updateDoc(doc(db, 'rooms', id), data);
+      const updateData = { ...data };
+      if (updateData.status === 'CLEANING') {
+        updateData.cleaningStartedAt = serverTimestamp();
+      } else if (updateData.status !== undefined) {
+        updateData.cleaningStartedAt = null;
+      }
+      await updateDoc(doc(db, 'rooms', id), updateData);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `rooms/${id}`);
     }
@@ -680,13 +717,15 @@ export default function App() {
         // Antigo quarto para CLEANING somente se estava ocupado por este hóspede
         batch.update(doc(db, 'rooms', oldRoomId), {
           status: 'CLEANING',
-          guest: null
+          guest: null,
+          cleaningStartedAt: serverTimestamp()
         });
         
         // Novo quarto para OCCUPIED somente se o hóspede já estava no quarto antigo
         batch.update(doc(db, 'rooms', newRoomId), {
           status: 'OCCUPIED',
-          guest: booking.guestName
+          guest: booking.guestName,
+          cleaningStartedAt: null
         });
       }
       
@@ -806,17 +845,26 @@ export default function App() {
   };
 
   const handleExportCSV = () => {
-    const checkedOutBookings = bookings.filter(b => b.status === 'CHECKED_OUT').sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0));
+    const sortedAndFiltered = bookings
+      .filter(b => b.status === 'CHECKED_OUT')
+      .filter(b => {
+        if (!b.checkedOutAt) return false;
+        const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+        const MatchesYear = checkoutDate.getFullYear() === financeYearFilter;
+        const MatchesMonth = financeMonthFilter === -1 || checkoutDate.getMonth() === financeMonthFilter;
+        return MatchesYear && MatchesMonth;
+      })
+      .sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0));
     
-    if (checkedOutBookings.length === 0) {
-      alert("Não há dados para exportar.");
+    if (sortedAndFiltered.length === 0) {
+      alert("Não há dados para exportar neste período.");
       return;
     }
     
     // Headers
     let csvContent = "Data de Saida,Hospede,Quarto,Recepcionista,Total Estadia,Total Consumo,Desconto,Total Pago,Metodo de Pagamento,Origem\n";
     
-    checkedOutBookings.forEach(b => {
+    sortedAndFiltered.forEach(b => {
       const room = rooms.find(r => r.id === b.roomId);
       const isAirbnb = b.source === 'AIRBNB';
       const stayTotal = isAirbnb ? (Number(b.extraStayCharges) || 0) : (Number(b.totalPrice) || 0);
@@ -842,7 +890,8 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `financeiro_${new Date().toISOString().split('T')[0]}.csv`);
+    const monthNameForFile = financeMonthFilter === -1 ? 'ano' : monthsList[financeMonthFilter].toLowerCase();
+    link.setAttribute("download", `financeiro_${monthNameForFile}_${financeYearFilter}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -919,7 +968,8 @@ export default function App() {
       if (isActiveToday) {
         batch.update(doc(db, 'rooms', data.roomId), {
           status: 'OCCUPIED',
-          guest: data.guestName
+          guest: data.guestName,
+          cleaningStartedAt: null
         });
       }
 
@@ -937,6 +987,54 @@ export default function App() {
     (r.guest && r.guest.toLowerCase().includes(search.toLowerCase())) ||
     r.type.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredGuests = guests.filter(g =>
+    (g.fullName && g.fullName.toLowerCase().includes(search.toLowerCase())) ||
+    (g.email && g.email.toLowerCase().includes(search.toLowerCase())) ||
+    (g.phone && g.phone.toLowerCase().includes(search.toLowerCase())) ||
+    (g.document && g.document.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const filteredProducts = products.filter(p =>
+    (p.name && p.name.toLowerCase().includes(search.toLowerCase())) ||
+    (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const filteredUsers = appUsers.filter(u =>
+    (u.name && u.name.toLowerCase().includes(search.toLowerCase())) ||
+    (u.email && u.email.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const filteredBookingsFinance = bookings
+    .filter(b => b.status === 'CHECKED_OUT')
+    .filter(b => {
+      if (!b.checkedOutAt) return false;
+      const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+      const MatchesYear = checkoutDate.getFullYear() === financeYearFilter;
+      const MatchesMonth = financeMonthFilter === -1 || checkoutDate.getMonth() === financeMonthFilter;
+      return MatchesYear && MatchesMonth;
+    })
+    .filter(b => {
+      const room = rooms.find(r => r.id === b.roomId);
+      const roomNum = room?.number || '';
+      return (
+        (b.guestName && b.guestName.toLowerCase().includes(search.toLowerCase())) ||
+        roomNum.includes(search) ||
+        (b.paymentMethod && b.paymentMethod.toLowerCase().includes(search.toLowerCase())) ||
+        (b.createdBy?.name && b.createdBy.name.toLowerCase().includes(search.toLowerCase()))
+      );
+    });
+
+  const selectedMonthRevenue = bookings
+    .filter(b => b.status === 'CHECKED_OUT')
+    .filter(b => {
+      if (!b.checkedOutAt) return false;
+      const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+      const MatchesYear = checkoutDate.getFullYear() === financeYearFilter;
+      const MatchesMonth = financeMonthFilter === -1 || checkoutDate.getMonth() === financeMonthFilter;
+      return MatchesYear && MatchesMonth;
+    })
+    .reduce((acc, b) => acc + getBookingFinalTotal(b), 0);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1122,13 +1220,6 @@ export default function App() {
               className="w-full border border-white/10 hover:bg-white/5 text-white py-4 rounded-2xl font-bold uppercase tracking-widest flex items-center justify-center gap-3 transition-all text-xs"
             >
               Acessar com Google Auth
-            </button>
-            
-            <button
-              onClick={() => { setIsLoginMode(!isLoginMode); setAuthError(''); }}
-              className="mt-6 text-[10px] text-brand-gold uppercase font-black tracking-tighter hover:text-brand-gold/70 transition-colors"
-            >
-              {isLoginMode ? 'Precisa de acesso? Criar conta' : 'Já tem acesso? Entrar'}
             </button>
           </div>
         </motion.div>
@@ -1337,7 +1428,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {guests.map((guest) => {
+                    {filteredGuests.map((guest) => {
                       const isActive = rooms.some(r => r.guest === guest.fullName);
                       return (
                         <tr key={guest.id} className="text-sm border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors">
@@ -1377,10 +1468,10 @@ export default function App() {
                         </tr>
                       );
                     })}
-                    {guests.length === 0 && (
+                    {filteredGuests.length === 0 && (
                       <tr>
                         <td colSpan={5} className="py-20 text-center text-slate-600 italic">
-                          Nenhum hóspede cadastrado na base de dados.
+                          {search ? 'Nenhum hóspede correspondente à pesquisa.' : 'Nenhum hóspede cadastrado na base de dados.'}
                         </td>
                       </tr>
                     )}
@@ -1410,7 +1501,7 @@ export default function App() {
             </div>
             
             <TimelineView 
-              rooms={rooms} 
+              rooms={filteredRooms} 
               bookings={bookings}
               onAddBooking={(roomId) => {
                 handleOpenBookingModal(roomId);
@@ -1432,7 +1523,7 @@ export default function App() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map(prod => (
+              {filteredProducts.map(prod => (
                 <div key={prod.id} className="bg-brand-slate p-8 rounded-[32px] border border-white/5 hover:border-brand-gold/30 transition-all group overflow-hidden relative">
                   <div className="absolute -right-4 -top-4 w-24 h-24 bg-brand-gold/5 rounded-full blur-2xl group-hover:bg-brand-gold/10 transition-all"></div>
                   <div className="p-4 bg-brand-gold/10 rounded-2xl w-fit mb-6">
@@ -1460,9 +1551,9 @@ export default function App() {
                 </div>
               ))}
               
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <div className="col-span-full py-20 text-center text-slate-600 italic">
-                  Nenhum produto cadastrado no catálogo.
+                  {search ? 'Nenhum produto correspondente à pesquisa.' : 'Nenhum produto cadastrado no catálogo.'}
                 </div>
               )}
             </div>
@@ -1471,53 +1562,110 @@ export default function App() {
 
         {activeTab === 'finance' && (
           <div className="bg-[#121214] rounded-3xl p-8 border border-white/5">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Receita Acumulada</p>
-                <h3 className="text-4xl font-serif text-brand-gold">R$ {totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
-              </div>
-              <div className="flex items-center gap-8">
-                <div className="text-right">
-                  <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Total de Reservas</p>
-                  <p className="text-lg text-emerald-500 font-bold">{bookings.filter(b => b.status === 'CHECKED_OUT').length}</p>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
+              <div className="flex items-end gap-6 flex-wrap">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest font-black mb-1">Receita do Período</p>
+                  <h3 className="text-4xl font-serif text-brand-gold">R$ {selectedMonthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                  <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-medium">
+                    {financeMonthFilter === -1 ? 'Todos os meses' : monthsList[financeMonthFilter]} de {financeYearFilter}
+                  </p>
                 </div>
+                <div className="border-l border-white/10 pl-6 h-12 flex flex-col justify-center">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-0.5">Acumulado Geral</p>
+                  <p className="text-sm font-bold text-slate-300">R$ {totalRevenueValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              {/* Filtering Controls */}
+              <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+                {/* Month Dropdown */}
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1.5 font-mono">Mês de Referência</span>
+                  <select
+                    value={financeMonthFilter}
+                    onChange={(e) => setFinanceMonthFilter(Number(e.target.value))}
+                    className="bg-[#1a1a1f] border border-white/5 rounded-xl py-2.5 px-4 focus:outline-none focus:border-brand-gold/50 cursor-pointer text-xs text-brand-cream font-bold"
+                  >
+                    <option value={-1}>Todos os Meses</option>
+                    {monthsList.map((m, idx) => (
+                      <option key={idx} value={idx}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Year Dropdown */}
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1.5 font-mono">Ano</span>
+                  <select
+                    value={financeYearFilter}
+                    onChange={(e) => setFinanceYearFilter(Number(e.target.value))}
+                    className="bg-[#1a1a1f] border border-white/5 rounded-xl py-2.5 px-4 focus:outline-none focus:border-brand-gold/50 cursor-pointer text-xs text-brand-cream font-bold"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Total Bookings Info */}
+                <div className="text-right px-4">
+                  <p className="text-[9px] text-slate-500 uppercase tracking-widest font-black mb-1.5 font-mono">Reservas no Período</p>
+                  <p className="text-lg text-emerald-500 font-bold leading-none py-1.5">{filteredBookingsFinance.length}</p>
+                </div>
+
+                {/* Export Button */}
                 <button
                   onClick={handleExportCSV}
-                  className="bg-brand-gold text-brand-bg px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-gold/10 hover:scale-105 transition-all"
+                  className="bg-brand-gold text-brand-bg px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-gold/10 hover:scale-105 transition-all self-end"
                 >
-                  <Download size={16} /> Exportar
+                  <Download size={14} /> Exportar
                 </button>
               </div>
             </div>
             
-            <div className="h-64 flex items-end gap-2 px-4 bg-white/[0.01] rounded-2xl relative mb-12">
+            <div className="h-64 flex items-end gap-2 px-4 bg-white/[0.01] rounded-2xl relative mb-12 border border-white/[0.02] pt-8">
               {/* Simple chart logic based on bookings per month */}
               {(() => {
                 const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                 const monthlyRevenue = Array(12).fill(0);
                 
                 bookings.filter(b => b.status === 'CHECKED_OUT' && b.checkedOutAt).forEach(b => {
-                  const date = b.checkedOutAt.toDate();
-                  monthlyRevenue[date.getMonth()] += (b.finalTotal || 0);
+                  const date = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+                  if (date.getFullYear() === financeYearFilter) {
+                    monthlyRevenue[date.getMonth()] += getBookingFinalTotal(b);
+                  }
                 });
 
                 const maxRevenue = Math.max(...monthlyRevenue, 1000); // minimum scale of 1000
 
-                return monthlyRevenue.map((rev, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+                return monthlyRevenue.map((rev, i) => {
+                  const isActive = financeMonthFilter === i;
+                  return (
                     <div 
-                      className="w-full bg-brand-gold/20 group-hover:bg-brand-gold transition-all rounded-t-lg relative" 
-                      style={{ height: `${Math.max(5, (rev / maxRevenue) * 100)}%` }}
+                      key={i} 
+                      onClick={() => setFinanceMonthFilter(i)}
+                      className="flex-1 flex flex-col items-center group relative h-full justify-end cursor-pointer"
+                      title={`Clique para filtrar: ${monthsList[i]}`}
                     >
-                      {rev > 0 && (
-                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-brand-slate text-[8px] font-black p-2 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                      )}
+                      <div 
+                        className={`w-full transition-all rounded-t-lg relative ${isActive ? 'bg-brand-gold shadow-lg shadow-brand-gold/30' : 'bg-brand-gold/20 group-hover:bg-brand-gold/50'}`} 
+                        style={{ height: `${Math.max(5, (rev / maxRevenue) * 100)}%` }}
+                      >
+                        {rev > 0 && (
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-brand-slate text-[8px] font-black p-2 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 font-mono">
+                            R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`mt-4 text-[9px] font-black uppercase tracking-widest transition-colors ${isActive ? 'text-brand-gold' : 'text-slate-600 group-hover:text-slate-400'}`}>
+                        {months[i]}
+                      </span>
                     </div>
-                    <span className="mt-4 text-[9px] text-slate-600 font-black uppercase tracking-widest">{months[i]}</span>
-                  </div>
-                ));
+                  );
+                });
               })()}
             </div>
 
@@ -1538,7 +1686,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bookings.filter(b => b.status === 'CHECKED_OUT').sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0)).map((b, idx) => {
+                    {filteredBookingsFinance.sort((a, b) => (b.checkedOutAt?.toMillis() || 0) - (a.checkedOutAt?.toMillis() || 0)).map((b, idx) => {
                       const isAirbnb = b.source === 'AIRBNB';
                       const stayTotal = isAirbnb ? (Number(b.extraStayCharges) || 0) : (Number(b.totalPrice) || 0);
                       const consumptionTotal = b.consumptions?.reduce((acc, c) => acc + (c.price * c.quantity), 0) || 0;
@@ -1610,10 +1758,10 @@ export default function App() {
                         </tr>
                       );
                     })}
-                    {bookings.filter(b => b.status === 'CHECKED_OUT').length === 0 && (
+                    {filteredBookingsFinance.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-600 italic text-sm">
-                          Nenhum histórico financeiro encontrado.
+                        <td colSpan={8} className="py-12 text-center text-slate-600 italic text-sm">
+                          {search ? 'Nenhum histórico correspondente à pesquisa.' : 'Nenhum histórico financeiro encontrado.'}
                         </td>
                       </tr>
                     )}
@@ -1727,7 +1875,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {appUsers.map((u) => (
+                        {filteredUsers.map((u) => (
                           <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group align-middle">
                             <td className="py-4 px-4">
                               <div className="flex items-center gap-3">
@@ -1783,10 +1931,10 @@ export default function App() {
                             </td>
                           </tr>
                         ))}
-                        {appUsers.length === 0 && (
+                        {filteredUsers.length === 0 && (
                           <tr>
                             <td colSpan={5} className="py-20 text-center text-slate-600 italic">
-                              Nenhum colaborador registrado.
+                              {search ? 'Nenhum colaborador correspondente à pesquisa.' : 'Nenhum colaborador registrado.'}
                             </td>
                           </tr>
                         )}
@@ -2176,6 +2324,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <LanChatbot />
     </div>
   );
 }

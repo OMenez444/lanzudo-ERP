@@ -1,7 +1,7 @@
 import React from 'react';
 import { Room } from '../types';
 import { motion } from 'motion/react';
-import { Edit2, BedDouble, Users } from 'lucide-react';
+import { Edit2, BedDouble, Users, Timer } from 'lucide-react';
 
 interface RoomCardProps {
   room: Room;
@@ -20,21 +20,71 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   onEdit,
   onManageConsumption 
 }) => {
-  const getStatusColor = (status: string) => {
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    if (room.status !== 'CLEANING' || !room.cleaningStartedAt) return;
+
+    // Set an interval to refresh countdown every second
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room.status, room.cleaningStartedAt]);
+
+  const getCleaningTimer = () => {
+    if (room.status !== 'CLEANING' || !room.cleaningStartedAt) return null;
+    
+    const startMs = typeof room.cleaningStartedAt.toMillis === 'function'
+      ? room.cleaningStartedAt.toMillis()
+      : (room.cleaningStartedAt.seconds
+          ? room.cleaningStartedAt.seconds * 1000
+          : new Date(room.cleaningStartedAt).getTime());
+
+    if (!startMs || isNaN(startMs)) return null;
+
+    const elapsedMs = now - startMs;
+    const limitMs = 60 * 60 * 1000; // 60 minutes
+    const remainingMs = limitMs - elapsedMs;
+    
+    const exceeded = remainingMs <= 0;
+    const absRemainingMs = Math.abs(remainingMs);
+    
+    const totalSeconds = Math.floor(absRemainingMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    return {
+      formattedTime,
+      exceeded,
+      minutesElapsed: Math.floor(elapsedMs / (60 * 1000))
+    };
+  };
+
+  const timerInfo = getCleaningTimer();
+  const exceededCleaning = !!timerInfo?.exceeded;
+
+  const getStatusColor = (status: string, exceeded: boolean) => {
     switch (status) {
       case 'AVAILABLE': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
       case 'OCCUPIED': return 'bg-brand-gold/10 text-brand-gold border-brand-gold/20';
-      case 'CLEANING': return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
+      case 'CLEANING': 
+        return exceeded 
+          ? 'bg-red-500/20 text-red-400 border-red-500/30 font-bold animate-[pulse_1.5s_infinite]' 
+          : 'bg-sky-500/10 text-sky-400 border-sky-500/20';
       case 'MAINTENANCE': return 'bg-red-500/10 text-red-400 border-red-500/20';
       default: return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, exceeded: boolean) => {
     switch (status) {
       case 'AVAILABLE': return 'Livre';
       case 'OCCUPIED': return 'VIP';
-      case 'CLEANING': return 'Limpeza';
+      case 'CLEANING': return exceeded ? 'Atrasado' : 'Limpeza';
       case 'MAINTENANCE': return 'Manutenção';
       default: return status;
     }
@@ -50,7 +100,13 @@ export const RoomCard: React.FC<RoomCardProps> = ({
           onManageConsumption(room.id);
         }
       }}
-      className={`bg-brand-slate rounded-3xl border border-white/5 transition-all duration-500 group relative overflow-hidden flex flex-col ${room.status === 'OCCUPIED' ? 'cursor-pointer hover:border-brand-gold/30' : ''}`}
+      className={`bg-brand-slate rounded-3xl border transition-all duration-500 group relative overflow-hidden flex flex-col ${
+        room.status === 'OCCUPIED' ? 'cursor-pointer hover:border-brand-gold/30' : ''
+      } ${
+        room.status === 'CLEANING' && exceededCleaning 
+          ? 'border-red-500/40 shadow-lg shadow-red-500/5 bg-gradient-to-b from-brand-slate to-red-950/10 ring-1 ring-red-500/20 animate-[pulse_2.5s_infinite]' 
+          : 'border-white/5'
+      }`}
     >
       <div className="p-8 flex-1">
         <div className="flex justify-between items-start mb-6">
@@ -59,8 +115,8 @@ export const RoomCard: React.FC<RoomCardProps> = ({
             <h4 className="text-2xl font-serif text-brand-cream">{room.type}</h4>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className={`text-[9px] px-3 py-1 rounded-full border font-black uppercase tracking-[0.1em] ${getStatusColor(room.status)}`}>
-              {getStatusLabel(room.status)}
+            <span className={`text-[9px] px-3 py-1 rounded-full border font-black uppercase tracking-[0.1em] ${getStatusColor(room.status, exceededCleaning)}`}>
+              {getStatusLabel(room.status, exceededCleaning)}
             </span>
             {onEdit && (
               <button 
@@ -95,10 +151,24 @@ export const RoomCard: React.FC<RoomCardProps> = ({
             </div>
           </div>
           
-          <div className="flex justify-between border-b border-white/5 pb-2 px-2">
-            <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Hóspede Atual</span>
-            <span className="text-slate-200 font-serif text-sm truncate max-w-[120px]">{room.guest || '—'}</span>
-          </div>
+          {room.status === 'CLEANING' && timerInfo ? (
+            <div className={`flex justify-between items-center bg-white/[0.02] p-3 rounded-2xl border ${exceededCleaning ? 'border-red-500/20 bg-red-500/5 animate-[pulse_2s_infinite]' : 'border-sky-500/10 bg-sky-500/5'} transition-all`}>
+              <div className="flex items-center gap-2">
+                <Timer size={14} className={exceededCleaning ? 'text-red-400 animate-pulse' : 'text-sky-400'} />
+                <span className={`text-[9px] font-black uppercase tracking-widest ${exceededCleaning ? 'text-red-400' : 'text-slate-500'}`}>
+                  {exceededCleaning ? 'Atraso Crítico' : 'Tempo Restante'}
+                </span>
+              </div>
+              <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded ${exceededCleaning ? 'text-red-400 bg-red-400/15 animate-pulse font-extrabold ring-1 ring-red-500/20' : 'text-sky-300 bg-sky-500/10'}`}>
+                {exceededCleaning ? `-${timerInfo.formattedTime}` : timerInfo.formattedTime}
+              </span>
+            </div>
+          ) : (
+            <div className="flex justify-between border-b border-white/5 pb-2 px-2">
+              <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Hóspede Atual</span>
+              <span className="text-slate-200 font-serif text-sm truncate max-w-[120px]">{room.guest || '—'}</span>
+            </div>
+          )}
 
           <div className="flex justify-between px-2">
             <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Tarifa</span>
@@ -136,7 +206,11 @@ export const RoomCard: React.FC<RoomCardProps> = ({
               e.stopPropagation();
               onRelease(room.id);
             }}
-            className="w-full bg-sky-500/10 text-sky-400 py-3 rounded-xl text-xs font-bold border border-sky-500/20 hover:bg-sky-500 hover:text-white transition-all tracking-widest uppercase"
+            className={`w-full py-3 rounded-xl text-xs font-bold border transition-all tracking-widest uppercase ${
+              exceededCleaning 
+                ? 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500 hover:text-white' 
+                : 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500 hover:text-white'
+            }`}
           >
             Liberar Quarto
           </button>

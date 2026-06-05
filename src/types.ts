@@ -15,6 +15,7 @@ export interface Room {
   guest: string | null;
   price: number;
   bedType?: BedType;
+  cleaningStartedAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export interface Product {
