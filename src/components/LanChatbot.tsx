@@ -16,11 +16,11 @@ const generateId = (prefix: string) => {
 
 export const LanChatbot: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Olá! Sou a **Lan**, sua assistente inteligente. Como posso ajudar você a operar o sistema hoje? 🏨✨'
+      text: 'Olá! Sou a **Lan**, sua assistente inteligente. Vestindo a camisa da nossa Seleção! 🇧🇷⚽ Como posso ajudar você a operar o sistema e gerenciar o hotel hoje? 🏆✨'
     }
   ]);
   const [inputValue, setInputValue] = useState('');

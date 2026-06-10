@@ -1140,7 +1140,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-brand-bg flex items-center justify-center">
+      <div className="h-screen bg-transparent flex items-center justify-center">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1148,7 +1148,7 @@ export default function App() {
         >
           <div className="w-16 h-16 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-6 mx-auto"></div>
           <h1 className="text-3xl font-serif text-brand-gold italic font-bold tracking-tighter uppercase">Lanzudo's</h1>
-          <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black">Hotel Experience</p>
+          <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black">Hotel Experience • 🇧🇷 ⚽</p>
         </motion.div>
       </div>
     );
@@ -1156,15 +1156,18 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="h-screen bg-brand-bg flex items-center justify-center p-6">
+      <div className="h-screen bg-transparent flex items-center justify-center p-6">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="w-full max-w-md p-12 bg-brand-slate border border-white/5 rounded-[40px] text-center shadow-2xl relative"
         >
           <div className="mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-green/20 text-brand-gold border border-brand-green/35 rounded-full text-[10px] tracking-wider uppercase font-black mb-4 select-none">
+              <span>🇧🇷 COPA DO MUNDO • HES ⚽</span>
+            </div>
             <h1 className="text-4xl font-serif text-brand-gold italic font-bold tracking-tighter uppercase mb-2">Lanzudo's</h1>
-            <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black opacity-60">Hotel Experience PMS</p>
+            <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black opacity-60">Hotel Experience PMS • Seleção 🏆</p>
           </div>
           
           <div className="space-y-6">
@@ -1257,7 +1260,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-brand-bg text-slate-200 overflow-hidden font-sans">
+    <div className="flex h-screen bg-transparent text-slate-200 overflow-hidden font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user?.email} userRole={currentUserProfile?.role} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto p-6 lg:p-12">
@@ -1270,7 +1273,12 @@ export default function App() {
                activeTab === 'products' ? 'Catálogo de Produtos' : 
                activeTab === 'users-admin' ? 'Controle de Colaboradores' : 'Financeiro'}
             </h2>
-            <p className="text-slate-500 italic">"Excelência em cada detalhe da hospitalidade."</p>
+            <p className="text-slate-500 italic flex flex-wrap items-center gap-2">
+              <span>"Excelência em cada detalhe da hospitalidade."</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-brand-green/20 text-brand-gold border border-brand-green/30 select-none uppercase">
+                <span>Seleção Hexa 🇧🇷 ⚽</span>
+              </span>
+            </p>
           </div>
           
           <div className="flex items-center gap-4 w-full md:w-auto">

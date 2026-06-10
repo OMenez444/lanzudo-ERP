@@ -6,26 +6,156 @@
   --font-serif: "Bodoni Moda", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* V2 Minimalist Midnight Forest & Champagne */
-  --color-brand-bg: #09100d;
-  --color-brand-gold: #c2a878;
-  --color-brand-cream: #f4f0e6;
-  --color-brand-slate: #111a15;
+  /* World Cup Brazil LIGHT Theme 🇧🇷 ⚽ Mode */
+  --color-brand-bg: #f3fcf6;         /* Soft fresh minty warm field background */
+  --color-brand-gold: #fccf14;       /* Radiant Brazilian canary yellow/gold */
+  --color-brand-cream: #013110;      /* Dark premium forest green for text and display headings */
+  --color-brand-slate: #ffffff;      /* Pristine white for modern clean container cards */
+  --color-brand-blue: #0036a3;       /* Premium Brazilian blue jersey color */
+  --color-brand-green: #009b3a;      /* Vivid flag green for accent metrics */
 
-  --color-gold-50: #fbf9f4;
-  --color-gold-100: #f4ebd7;
-  --color-gold-200: #e6d1a8;
-  --color-gold-300: #d6b473;
-  --color-gold-400: #c2a878;
-  --color-gold-500: #ab8e50;
-  --color-gold-600: #8c723b;
-  --color-gold-700: #6b5528;
-  --color-gold-800: #4a3a19;
-  --color-gold-900: #2b210c;
+  /* Gold/Yellow color shades for utility classes in light contrast */
+  --color-gold-50: #fefdf3;
+  --color-gold-100: #fef9d5;
+  --color-gold-200: #fdf0a2;
+  --color-[#fccf14]: #fccf14;
+  --color-gold-300: #fce362;
+  --color-gold-400: #cc9c00;
+  --color-gold-500: #b28400;
+  --color-gold-600: #936b00;
+  --color-gold-700: #755200;
+  --color-gold-800: #573a00;
+  --color-gold-900: #3c2400;
 }
 
 @layer base {
   body {
-    @apply bg-brand-bg text-slate-200 antialiased;
+    @apply bg-brand-bg text-slate-800 antialiased;
+    background-image: 
+      /* Brilho azul da bandeira no canto inferior direito */
+      radial-gradient(circle at 90% 90%, rgba(0, 54, 163, 0.16) 0%, transparent 50%),
+      /* Brilho amarelo vibrante no centro-direita */
+      radial-gradient(circle at 80% 50%, rgba(252, 207, 20, 0.22) 0%, transparent 45%),
+      /* Brilho verde bandeira no canto superior esquerdo */
+      radial-gradient(circle at 15% 20%, rgba(0, 155, 58, 0.18) 0%, transparent 60%),
+      /* Lindo e vibrante degradê de Copa do Mundo */
+      linear-gradient(135deg, #9fe6b4 0%, #fffbb0 50%, #b8d2ff 100%);
+    background-attachment: fixed;
+    position: relative;
+  }
+
+  /* Decorative Brazilian flag watermark on the page */
+  body::before {
+    content: "⚽ CAMPEONATO MUNDIAL • ORDEM E PROGRESSO 🇧🇷";
+    position: fixed;
+    bottom: 32px;
+    right: 100px;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    color: rgba(0, 155, 58, 0.35);
+    background-color: rgba(252, 207, 20, 0.15);
+    border: 1px solid rgba(0, 155, 58, 0.2);
+    padding: 6px 14px;
+    border-radius: 9999px;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 155, 58, 0.05);
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+  }
+  
+  /* Watermark design details for the field lines */
+  body::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 155, 58, 0.015) 62%, transparent 63%),
+      linear-gradient(to right, transparent 49.9%, rgba(0, 155, 58, 0.012) 50%, transparent 50.1%);
+    pointer-events: none;
+    z-index: -2;
+  }
+
+  /* Make sure typical dark elements look brilliant in light theme */
+  .text-slate-500 {
+    color: #375340 !important; /* Cool minty dark gray */
+  }
+  .text-slate-400 {
+    color: #2b4433 !important; /* Cool forest mid tone */
+  }
+  .text-slate-300 {
+    color: #162a1c !important; /* Rich deep green-gray */
+  }
+  .text-slate-200 {
+    color: #013110 !important; /* Pure Brazil text green */
+  }
+  .text-slate-100 {
+    color: #01210b !important; /* Extreme high contrast black-green */
+  }
+
+  @theme {
+    --color-brand-gold: #cc9c00; /* Use high-contrast gold to keep visual text tags readable */
+  }
+
+  /* Make sure brand-slate cards look incredibly themed with subtle green borders and golden shadows */
+  .bg-brand-slate {
+    background: linear-gradient(135deg, #ffffff 0%, #f3faf5 60%, #fffef2 100%) !important;
+    border: 1.5px solid rgba(0, 155, 58, 0.18) !important;
+    box-shadow: 
+      0 12px 30px -4px rgba(0, 155, 58, 0.06), 
+      0 6px 16px -2px rgba(252, 207, 20, 0.1) !important;
+  }
+
+  /* High contrast action items */
+  .bg-brand-gold {
+    background-color: #fccf14 !important;
+    color: #013110 !important;
+    font-weight: 800 !important;
+    border: 1px solid rgba(0, 155, 58, 0.1) !important;
+    box-shadow: 0 4px 12px rgba(252, 207, 20, 0.3) !important;
+  }
+  .bg-brand-gold:hover {
+    background-color: #e5bd10 !important;
+    transform: translateY(-1px);
+  }
+
+  /* Adjust borders designed for dark theme to map cleanly in light mode */
+  .border-white\/5 {
+    border-color: rgba(0, 155, 58, 0.12) !important;
+  }
+  .border-white\/10 {
+    border-color: rgba(0, 155, 58, 0.2) !important;
+  }
+  .bg-white\/5 {
+    background-color: rgba(0, 155, 58, 0.04) !important;
+  }
+  .bg-white\/10 {
+    background-color: rgba(0, 155, 58, 0.08) !important;
+  }
+  .bg-[#1a1a1f] {
+    background-color: #ffffff !important;
+    border: 1px solid rgba(0, 155, 58, 0.1) !important;
+  }
+  .bg-[#121214] {
+    background-color: #ffffff !important;
+    border: 1px solid rgba(0, 155, 58, 0.1) !important;
+  }
+  .text-brand-gold {
+    color: #cc9c00 !important; /* Ensure readable contrast on white background for icons */
+  }
+
+  /* Form controls text and placeholders readability */
+  input, textarea, select {
+    color: #013110 !important;
+    background-color: #ffffff !important;
+    border-color: rgba(0, 155, 58, 0.2) !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #557760 !important;
   }
 }
