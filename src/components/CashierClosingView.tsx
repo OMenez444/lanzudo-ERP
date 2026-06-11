@@ -184,50 +184,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
   };
 
   const executePrint = () => {
-    const printArea = document.getElementById('print-coupon-root');
-    if (!printArea) return;
-    
-    // Create a temporary container
-    const tempDiv = document.createElement('div');
-    tempDiv.id = 'temp-print-area';
-    
-    // Deep clone the print area
-    const cloned = printArea.cloneNode(true) as HTMLElement;
-    tempDiv.appendChild(cloned);
-    
-    // Style the temp container for print
-    const tempStyle = document.createElement('style');
-    tempStyle.id = 'temp-print-style';
-    tempStyle.innerHTML = `
-      @media print {
-        body > :not(#temp-print-area) {
-          display: none !important;
-        }
-        #temp-print-area {
-          display: block !important;
-          width: 100% !important;
-          max-width: 80mm !important;
-          margin: 0 auto !important;
-          padding: 10px !important;
-          background: #ffffff !important;
-          color: #000000 !important;
-          font-family: monospace !important;
-        }
-        #temp-print-area * {
-          background: transparent !important;
-          color: #000000 !important;
-        }
-      }
-    `;
-    
-    document.body.appendChild(tempDiv);
-    document.body.appendChild(tempStyle);
-    
     window.print();
-    
-    // Cleanup afterwards
-    document.body.removeChild(tempDiv);
-    document.body.removeChild(tempStyle);
   };
 
   const formattedDate = (dateStr: string) => {
@@ -243,22 +200,59 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
       {/* Dynamic Print CSS to only print the coupon */}
       <style>{`
         @media print {
+          @page {
+            size: portrait;
+            margin: 5mm;
+          }
+          
+          /* Force strict light background & black text on printout */
+          body {
+            background-color: #ffffff !important;
+            background-image: none !important;
+            color: #000000 !important;
+          }
+          
+          /* Remove background watermark decoration */
+          body::before, body::after {
+            display: none !important;
+            content: none !important;
+          }
+          
+          /* Hide everything in the document body */
           body * {
-            visibility: hidden;
+            visibility: hidden !important;
           }
+          
+          /* Explicitly restore visibility and force styling only for the coupon card and its contents */
           #print-coupon-root, #print-coupon-root * {
-            visibility: visible;
+            visibility: visible !important;
           }
+          
           #print-coupon-root {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: white !important;
-            color: black !important;
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 80mm !important;
+            margin: 0 auto !important;
+            padding: 15px !important;
+            background-color: #ffffff !important;
+            color: #000000 !important;
             font-family: monospace !important;
-            padding: 10px;
+            box-shadow: none !important;
+            border: none !important;
+            z-index: 9999999 !important;
           }
+
+          /* Match specific nested coupon element classes */
+          #print-coupon-root * {
+            background-color: transparent !important;
+            color: #000000 !important;
+            text-shadow: none !important;
+            box-shadow: none !important;
+          }
+          
           .no-print {
             display: none !important;
           }
@@ -681,7 +675,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
       {/* Comprovante / Coupon Modal */}
       <AnimatePresence>
         {showReceiptModal && selectedReceipt && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto no-print">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
