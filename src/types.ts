@@ -99,4 +99,22 @@ export interface BookingStatusLog {
   timestamp: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
+export interface CashierClosing {
+  id?: string;
+  date: string; // YYYY-MM-DD
+  shift: 'DIURNO' | 'NOTURNO';
+  closedByUid: string;
+  closedByName: string;
+  closedByEmail: string | null;
+  closedAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  totalRevenue: number;
+  totalCash: number;
+  totalPix: number;
+  totalDebit: number;
+  totalCredit: number;
+  wasZero: boolean;
+  observations?: string;
+}
+
+
 

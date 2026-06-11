@@ -7,7 +7,8 @@ import {
   CreditCard, 
   LogOut, 
   Settings,
-  Shield
+  Shield,
+  Receipt
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userE
     { id: 'guests', icon: <Users size={20} />, label: 'Hóspedes' },
     { id: 'products', icon: <ShoppingBag size={20} />, label: 'Produtos' },
     { id: 'finance', icon: <CreditCard size={20} />, label: 'Financeiro' },
+    { id: 'cashier-closing', icon: <Receipt size={20} />, label: 'Fechamento de Caixa' },
   ];
 
   return (

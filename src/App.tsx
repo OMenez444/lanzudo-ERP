@@ -28,6 +28,7 @@ import { ConsumptionModal } from './components/ConsumptionModal';
 import { AddGuestModal } from './components/AddGuestModal';
 import { PaymentModal } from './components/PaymentModal';
 import { LanChatbot } from './components/LanChatbot';
+import { CashierClosingView } from './components/CashierClosingView';
 import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod, AppUser, BookingStatusLog } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1271,7 +1272,8 @@ export default function App() {
                activeTab === 'rooms' ? 'Mapa de Unidades' : 
                activeTab === 'guests' ? 'Base de Hóspedes' : 
                activeTab === 'products' ? 'Catálogo de Produtos' : 
-               activeTab === 'users-admin' ? 'Controle de Colaboradores' : 'Financeiro'}
+               activeTab === 'users-admin' ? 'Controle de Colaboradores' : 
+               activeTab === 'cashier-closing' ? 'Fechamento de Caixa' : 'Financeiro'}
             </h2>
             <p className="text-slate-500 italic flex flex-wrap items-center gap-2">
               <span>"Excelência em cada detalhe da hospitalidade."</span>
@@ -2071,6 +2073,19 @@ export default function App() {
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {activeTab === 'cashier-closing' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <CashierClosingView 
+              bookings={bookings}
+              currentUser={user}
+              currentUserProfile={currentUserProfile}
+            />
           </motion.div>
         )}
 

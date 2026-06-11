@@ -56,6 +56,27 @@
         "description": { "type": "string" }
       },
       "required": ["name", "price"]
+    },
+    "CashierClosing": {
+      "title": "CashierClosing",
+      "description": "Daily cashier close record",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "shift": { "type": "string" },
+        "closedByUid": { "type": "string" },
+        "closedByName": { "type": "string" },
+        "closedByEmail": { "type": "string" },
+        "closedAt": { "type": "string", "format": "date-time" },
+        "totalRevenue": { "type": "integer" },
+        "totalCash": { "type": "integer" },
+        "totalPix": { "type": "integer" },
+        "totalDebit": { "type": "integer" },
+        "totalCredit": { "type": "integer" },
+        "wasZero": { "type": "boolean" },
+        "observations": { "type": "string" }
+      },
+      "required": ["date", "shift", "closedByUid", "closedByName", "totalRevenue"]
     }
   },
   "firestore": {
@@ -74,6 +95,10 @@
     "/experiences/{experienceId}": {
       "schema": "Experience",
       "description": "Catalogue of experiences"
+    },
+    "/cashierClosings/{closingId}": {
+      "schema": "CashierClosing",
+      "description": "Daily cashier closings history"
     }
   }
 }
