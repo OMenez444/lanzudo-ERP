@@ -20,11 +20,13 @@ import { Booking, CashierClosing } from '../types';
 interface CashierClosingViewProps {
   bookings: Booking[];
   currentUser: {
-    uid: string;
-    email: string | null;
-    displayName: string | null;
+    uid?: string;
+    id?: string;
+    email?: string | null;
+    displayName?: string | null;
+    name?: string | null;
   } | null;
-  currentUserProfile: {
+  currentUserProfile?: {
     name: string | null;
     role: 'ADMIN' | 'RECEPTIONIST';
   } | null;
@@ -47,6 +49,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
   const [observations, setObservations] = useState<string>('');
   const [closingsHistory, setClosingsHistory] = useState<CashierClosing[]>([]);
   const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [selectedReceipt, setSelectedReceipt] = useState<CashierClosing | null>(null);
 
@@ -126,30 +129,32 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
   const handleSaveClosing = async () => {
     if (!currentUser) return;
     setSaveStatus('SAVING');
+    setErrorMessage('');
     try {
       const closingId = `closing_${selectedDate}_${selectedShift}`;
       const payload: CashierClosing = {
-        date: selectedDate,
-        shift: selectedShift,
-        closedByUid: currentUser.uid,
-        closedByName: currentUserProfile?.name || currentUser.displayName || 'Colaborador',
-        closedByEmail: currentUser.email,
+        date: selectedDate || '',
+        shift: selectedShift || 'DIURNO',
+        closedByUid: currentUser.uid || currentUser.id || 'unknown',
+        closedByName: currentUserProfile?.name || currentUser.name || currentUser.displayName || 'Colaborador',
+        closedByEmail: currentUser.email || null,
         closedAt: new Date().toISOString(),
-        totalRevenue: totals.total,
-        totalCash: totals.DINHEIRO,
-        totalPix: totals.PIX,
-        totalDebit: totals.DEBITO,
-        totalCredit: totals.CREDITO,
-        wasZero: isZeroClosing,
-        observations: observations,
+        totalRevenue: Number(totals.total) || 0,
+        totalCash: Number(totals.DINHEIRO) || 0,
+        totalPix: Number(totals.PIX) || 0,
+        totalDebit: Number(totals.DEBITO) || 0,
+        totalCredit: Number(totals.CREDITO) || 0,
+        wasZero: isZeroClosing || false,
+        observations: observations || '',
       };
 
       await setDoc(doc(db, 'cashierClosings', closingId), payload);
       setSaveStatus('SUCCESS');
       setObservations('');
       setTimeout(() => setSaveStatus('IDLE'), 3000);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
+      setErrorMessage(e instanceof Error ? e.message : String(e));
       setSaveStatus('ERROR');
     }
   };
@@ -160,26 +165,69 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
     } else {
       // Build on-the-fly preview object for current state
       setSelectedReceipt({
-        date: selectedDate,
-        shift: selectedShift,
-        closedByUid: currentUser?.uid || 'temp',
-        closedByName: currentUserProfile?.name || currentUser?.displayName || 'Colaborador',
-        closedByEmail: currentUser?.email || '',
+        date: selectedDate || '',
+        shift: selectedShift || 'DIURNO',
+        closedByUid: currentUser?.uid || currentUser?.id || 'temp',
+        closedByName: currentUserProfile?.name || currentUser?.name || currentUser?.displayName || 'Colaborador',
+        closedByEmail: currentUser?.email || null,
         closedAt: new Date().toISOString(),
-        totalRevenue: totals.total,
-        totalCash: totals.DINHEIRO,
-        totalPix: totals.PIX,
-        totalDebit: totals.DEBITO,
-        totalCredit: totals.CREDITO,
+        totalRevenue: totals.total || 0,
+        totalCash: totals.DINHEIRO || 0,
+        totalPix: totals.PIX || 0,
+        totalDebit: totals.DEBITO || 0,
+        totalCredit: totals.CREDITO || 0,
         wasZero: isZeroClosing,
-        observations: observations,
+        observations: observations || '',
       });
     }
     setShowReceiptModal(true);
   };
 
   const executePrint = () => {
+    const printArea = document.getElementById('print-coupon-root');
+    if (!printArea) return;
+    
+    // Create a temporary container
+    const tempDiv = document.createElement('div');
+    tempDiv.id = 'temp-print-area';
+    
+    // Deep clone the print area
+    const cloned = printArea.cloneNode(true) as HTMLElement;
+    tempDiv.appendChild(cloned);
+    
+    // Style the temp container for print
+    const tempStyle = document.createElement('style');
+    tempStyle.id = 'temp-print-style';
+    tempStyle.innerHTML = `
+      @media print {
+        body > :not(#temp-print-area) {
+          display: none !important;
+        }
+        #temp-print-area {
+          display: block !important;
+          width: 100% !important;
+          max-width: 80mm !important;
+          margin: 0 auto !important;
+          padding: 10px !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: monospace !important;
+        }
+        #temp-print-area * {
+          background: transparent !important;
+          color: #000000 !important;
+        }
+      }
+    `;
+    
+    document.body.appendChild(tempDiv);
+    document.body.appendChild(tempStyle);
+    
     window.print();
+    
+    // Cleanup afterwards
+    document.body.removeChild(tempDiv);
+    document.body.removeChild(tempStyle);
   };
 
   const formattedDate = (dateStr: string) => {
@@ -343,7 +391,14 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
               <p className="text-xs text-[#009b3a] text-center font-bold">✓ Fechamento oficializado no sistema com sucesso!</p>
             )}
             {saveStatus === 'ERROR' && (
-              <p className="text-xs text-red-500 text-center font-bold">⚠️ Erro ao salvar fechamento no Firestore.</p>
+              <div className="text-center space-y-1">
+                <p className="text-xs text-red-500 font-bold">⚠️ Erro ao salvar fechamento no Firestore.</p>
+                {errorMessage && (
+                  <p className="text-[10px] text-red-400 font-mono break-words max-w-xs mx-auto opacity-80 leading-tight">
+                    {errorMessage}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
