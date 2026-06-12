@@ -58,9 +58,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     ? Math.max(0, Math.round((new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
   
-  // Pricing rules: 1=139, 2=189, 3=279
+  // Pricing rules: 1=139, 2=199.99, 3=279
   let pricePerNight = 139;
-  if (formData.guestsCount === 2) pricePerNight = 189;
+  if (formData.guestsCount === 2) pricePerNight = 199.99;
   if (formData.guestsCount === 3) pricePerNight = 279;
   if (formData.guestsCount >= 4) pricePerNight = 279; // fallback
   
@@ -235,7 +235,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                       </div>
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 2 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">2 Pessoas</p>
-                        <p className="text-xs font-mono">189,00</p>
+                        <p className="text-xs font-mono">199,99</p>
                       </div>
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 3 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">3 Pessoas</p>

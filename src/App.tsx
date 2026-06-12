@@ -616,7 +616,7 @@ export default function App() {
       // cobramos o valor padrão na extensão feita direto no balcão.
       if (extraPricePerNight === 0) {
         extraPricePerNight = 139;
-        if (booking.guestsCount === 2) extraPricePerNight = 189;
+        if (booking.guestsCount === 2) extraPricePerNight = 199.99;
         if (booking.guestsCount === 3) extraPricePerNight = 279;
         if (booking.guestsCount >= 4) extraPricePerNight = 279;
       }
@@ -939,9 +939,9 @@ export default function App() {
     customPricePerNight?: number;
   }) => {
     try {
-      // Pricing rules: 1=139, 2=189, 3=279
+      // Pricing rules: 1=139, 2=199.99, 3=279
       let pricePerNight = 139;
-      if (data.guestsCount === 2) pricePerNight = 189;
+      if (data.guestsCount === 2) pricePerNight = 199.99;
       if (data.guestsCount === 3) pricePerNight = 279;
       if (data.guestsCount >= 4) pricePerNight = 279; // fallback
 
