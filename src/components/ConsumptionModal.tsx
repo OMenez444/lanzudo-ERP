@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Booking, Product, BookingStatusLog, Room, PaymentMethod } from '../types';
+import { Booking, Product, BookingStatusLog, Room, PaymentMethod, AppUser } from '../types';
 import { formatDisplayDate } from '../lib/dateUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check, DollarSign } from 'lucide-react';
@@ -37,6 +37,7 @@ interface ConsumptionModalProps {
     email: string | null;
     name: string | null;
   } | null;
+  users?: AppUser[];
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -52,7 +53,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onCancelBooking,
   rooms,
   onMoveGuest,
-  currentUser
+  currentUser,
+  users
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
@@ -73,6 +75,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const [upfrontAmount, setUpfrontAmount] = useState<string>('');
   const [upfrontMethod, setUpfrontMethod] = useState<PaymentMethod>('PIX');
+  const [upfrontReceiverUid, setUpfrontReceiverUid] = useState<string>('');
   const [isSavingUpfront, setIsSavingUpfront] = useState(false);
 
   const bookingId = booking?.id;
@@ -113,8 +116,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       const targetMethod = booking.upfrontPaymentMethod || 'PIX';
       setUpfrontAmount((prev) => (prev !== targetAmount ? targetAmount : prev)); // eslint-disable-line
       setUpfrontMethod((prev) => (prev !== targetMethod ? targetMethod : prev));
+      
+      const targetReceiverUid = booking.upfrontPaidBy?.uid || currentUser?.uid || '';
+      setUpfrontReceiverUid((prev) => (prev !== targetReceiverUid ? targetReceiverUid : prev));
     }
-  }, [bookingId, stayTotal, booking]);
+  }, [bookingId, stayTotal, booking, currentUser]);
 
   if (!isOpen || !booking) return null;
 
@@ -193,16 +199,24 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     setIsSavingUpfront(true);
     try {
       const amount = parseFloat(upfrontAmount) || 0;
+      
+      const selectedUser = users?.find(u => u.uid === upfrontReceiverUid);
+      const receiverInfo = selectedUser ? {
+        uid: selectedUser.uid,
+        email: selectedUser.email || null,
+        name: selectedUser.name || selectedUser.email?.split('@')[0] || 'Desconhecido'
+      } : (currentUser ? {
+        uid: currentUser.uid,
+        email: currentUser.email || null,
+        name: currentUser.name || currentUser.email?.split('@')[0] || 'Desconhecido'
+      } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' });
+
       await onUpdateBooking(booking.id, {
         upfrontPaid: true,
         upfrontPaymentAmount: amount,
         upfrontPaymentMethod: upfrontMethod,
         upfrontPaidAt: new Date().toISOString(),
-        upfrontPaidBy: currentUser ? {
-          uid: currentUser.uid,
-          email: currentUser.email || null,
-          name: currentUser.name || currentUser.email?.split('@')[0] || 'Desconhecido'
-        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' }
+        upfrontPaidBy: receiverInfo
       });
     } catch (error) {
       console.error("Erro ao salvar pagamento antecipado:", error);
@@ -496,6 +510,27 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                               <option value="CREDITO">Crédito</option>
                             </select>
                           </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Colaborador)</label>
+                          <select 
+                            value={upfrontReceiverUid}
+                            onChange={(e) => setUpfrontReceiverUid(e.target.value)}
+                            className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                          >
+                            {users && users.length > 0 ? (
+                              users.filter(u => u.status === 'ACTIVE').map(u => (
+                                <option key={u.uid} value={u.uid} className="bg-brand-slate text-white">
+                                  {u.name || u.email?.split('@')[0]}
+                                </option>
+                              ))
+                            ) : (
+                              <option value={currentUser?.uid || ''} className="bg-brand-slate text-white">
+                                {currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário Atual'}
+                              </option>
+                            )}
+                          </select>
                         </div>
                         <button 
                           onClick={handleSaveUpfront}

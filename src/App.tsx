@@ -2194,6 +2194,7 @@ export default function App() {
           rooms={rooms}
           onMoveGuest={handleMoveGuest}
           currentUser={user}
+          users={appUsers}
         />
 
         <AddGuestModal
