@@ -10,10 +10,11 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   History,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, orderBy, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Booking, CashierClosing, PaymentMethod } from '../types';
 
@@ -52,6 +53,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [selectedReceipt, setSelectedReceipt] = useState<CashierClosing | null>(null);
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
 
   // Subscribe to cashierClosings history
   useEffect(() => {
@@ -247,6 +249,31 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
     } catch (e: unknown) {
       console.error(e);
       setErrorMessage(e instanceof Error ? e.message : String(e));
+      setSaveStatus('ERROR');
+    }
+  };
+
+  const handleDeleteClosing = async (closingId: string, dateStr: string, shift: string) => {
+    try {
+      await deleteDoc(doc(db, 'cashierClosings', closingId));
+      
+      const logRef = doc(collection(db, 'statusLogs'));
+      await setDoc(logRef, {
+        id: logRef.id,
+        type: 'CASHIER_REOPEN',
+        shift: shift || 'DIURNO',
+        date: dateStr || '',
+        updatedBy: {
+          uid: currentUser?.uid || currentUser?.id || 'unknown',
+          email: currentUser?.email || null,
+          name: currentUserProfile?.name || currentUser?.name || currentUser?.displayName || 'Colaborador',
+        },
+        timestamp: new Date().toISOString()
+      });
+      setReopeningId(null);
+    } catch (error) {
+      console.error("Erro ao reabrir caixa:", error);
+      setErrorMessage(error instanceof Error ? error.message : String(error));
       setSaveStatus('ERROR');
     }
   };
@@ -744,13 +771,44 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                         R$ {c.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-4 text-center">
-                        <button
-                          onClick={() => handleOpenPrintPreview(c)}
-                          className="p-2 border border-white/10 hover:border-brand-gold rounded-xl hover:bg-brand-gold/10 text-slate-400 hover:text-brand-gold transition-all"
-                          title="Visualizar Comprovante Fiscal"
-                        >
-                          <FileText size={16} />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleOpenPrintPreview(c)}
+                            className="p-2 border border-white/10 hover:border-brand-gold rounded-xl hover:bg-brand-gold/10 text-slate-400 hover:text-brand-gold transition-all"
+                            title="Visualizar Comprovante Fiscal"
+                          >
+                            <FileText size={16} />
+                          </button>
+
+                          {reopeningId === c.id ? (
+                            <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-xl">
+                              <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider animate-pulse">Reabrir?</span>
+                              <button
+                                onClick={() => handleDeleteClosing(c.id, c.date, c.shift)}
+                                className="text-emerald-400 hover:text-emerald-300 font-black text-xs px-1"
+                                title="Confirmar"
+                              >
+                                Sim
+                              </button>
+                              <span className="text-slate-650 text-xs">/</span>
+                              <button
+                                onClick={() => setReopeningId(null)}
+                                className="text-slate-400 hover:text-white font-black text-xs px-1"
+                                title="Cancelar"
+                              >
+                                Não
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setReopeningId(c.id)}
+                              className="p-2 border border-white/10 hover:border-red-500/40 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all"
+                              title="Reabrir Caixa (Excluir Fechamento)"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
