@@ -446,7 +446,8 @@ export default function App() {
     
     const isAirbnb = activeBooking.source === 'AIRBNB';
     const stayTotal = isAirbnb ? (Number(activeBooking.extraStayCharges) || 0) : (Number(activeBooking.totalPrice) || 0);
-    const grandTotal = Math.max(0, stayTotal + consumptionsTotal - discount);
+    const upfrontAmt = activeBooking.upfrontPaid ? (Number(activeBooking.upfrontPaymentAmount) || 0) : 0;
+    const grandTotal = Math.max(0, stayTotal + consumptionsTotal - upfrontAmt - discount);
 
     try {
       const batch = writeBatch(db);
@@ -464,7 +465,12 @@ export default function App() {
         finalTotal: grandTotal,
         discount: discount,
         paymentMethod: method,
-        checkedOutAt: serverTimestamp()
+        checkedOutAt: serverTimestamp(),
+        checkedOutBy: user ? {
+          uid: user.uid,
+          email: user.email,
+          name: user.name || user.email?.split('@')[0] || 'Desconhecido'
+        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' }
       });
 
       // 3. Log the status action
@@ -477,7 +483,7 @@ export default function App() {
         updatedBy: user ? {
           uid: user.uid,
           email: user.email,
-          name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
+          name: user.name || user.email?.split('@')[0] || 'Desconhecido'
         } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
         timestamp: serverTimestamp()
       });
@@ -629,13 +635,21 @@ export default function App() {
     }
   };
 
-  const handleUpdateBooking = async (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => {
+  const handleUpdateBooking = async (bookingId: string, updates: { 
+    guestsCount?: number; 
+    stayTotal?: number;
+    upfrontPaid?: boolean;
+    upfrontPaymentAmount?: number;
+    upfrontPaymentMethod?: PaymentMethod;
+    upfrontPaidAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    upfrontPaidBy?: { uid: string; email: string | null; name: string | null; } | null;
+  }) => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
     try {
       const isAirbnb = booking.source === 'AIRBNB';
-      const dataToUpdate: Record<string, number> = {};
+      const dataToUpdate: Record<string, any> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
       
       if (updates.guestsCount !== undefined) {
         dataToUpdate.guestsCount = updates.guestsCount;
@@ -649,6 +663,22 @@ export default function App() {
         } else {
           dataToUpdate.totalPrice = updates.stayTotal;
         }
+      }
+
+      if (updates.upfrontPaid !== undefined) {
+        dataToUpdate.upfrontPaid = updates.upfrontPaid;
+      }
+      if (updates.upfrontPaymentAmount !== undefined) {
+        dataToUpdate.upfrontPaymentAmount = updates.upfrontPaymentAmount;
+      }
+      if (updates.upfrontPaymentMethod !== undefined) {
+        dataToUpdate.upfrontPaymentMethod = updates.upfrontPaymentMethod;
+      }
+      if (updates.upfrontPaidAt !== undefined) {
+        dataToUpdate.upfrontPaidAt = updates.upfrontPaidAt;
+      }
+      if (updates.upfrontPaidBy !== undefined) {
+        dataToUpdate.upfrontPaidBy = updates.upfrontPaidBy;
       }
 
       await updateDoc(doc(db, 'bookings', bookingId), dataToUpdate);
@@ -2037,16 +2067,32 @@ export default function App() {
                               {formattedTime}
                             </td>
                             <td className="py-4 px-4">
-                              <span className="font-mono text-xs text-brand-gold bg-brand-gold/5 border border-brand-gold/10 px-2.5 py-1 rounded">
-                                Quarto {room?.number || '-'}
-                              </span>
+                              {log.type === 'CASHIER_CLOSING' ? (
+                                <span className="font-mono text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1 rounded">
+                                  Caixa
+                                </span>
+                              ) : (
+                                <span className="font-mono text-xs text-brand-gold bg-brand-gold/5 border border-brand-gold/10 px-2.5 py-1 rounded">
+                                  Quarto {room?.number || '-'}
+                                </span>
+                              )}
                             </td>
                             <td className="py-4 px-4">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {getStatusBadge(log.previousStatus)}
-                                <span className="text-slate-600 text-xs font-bold leading-none">➔</span>
-                                {getStatusBadge(log.newStatus)}
-                              </div>
+                              {log.type === 'CASHIER_CLOSING' ? (
+                                <div className="text-xs font-medium text-brand-cream/90 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                                  <span className="text-slate-400">Fechamento Turno:</span>
+                                  <span className="text-brand-gold font-bold">{log.shift === 'NOTURNO' ? '🌙 NOTURNO' : '☀️ DIURNO'}</span>
+                                  <span className="text-slate-600">({log.date ? log.date.split('-').reverse().join('/') : ''})</span>
+                                  <span className="text-slate-600">•</span>
+                                  <span className="text-emerald-400 font-bold">R$ {log.totalRevenue ? log.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {getStatusBadge(log.previousStatus || 'NONE')}
+                                  <span className="text-slate-600 text-xs font-bold leading-none">➔</span>
+                                  {getStatusBadge(log.newStatus || 'CONFIRMED')}
+                                </div>
+                              )}
                             </td>
                             <td className="py-4 px-4">
                               <p className="text-xs font-bold text-slate-300 capitalize">{log.updatedBy?.name || 'Sistema'}</p>
@@ -2147,6 +2193,7 @@ export default function App() {
           onCancelBooking={handleCancelBooking}
           rooms={rooms}
           onMoveGuest={handleMoveGuest}
+          currentUser={user}
         />
 
         <AddGuestModal

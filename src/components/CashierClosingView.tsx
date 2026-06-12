@@ -15,7 +15,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, orderBy, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Booking, CashierClosing } from '../types';
+import { Booking, CashierClosing, PaymentMethod } from '../types';
 
 interface CashierClosingViewProps {
   bookings: Booking[];
@@ -100,17 +100,92 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
   // Filter bookings checked out during the selected shift period
   const { start: shiftStart, end: shiftEnd } = getShiftPeriod(selectedDate, selectedShift);
 
-  const dailyBookings = bookings.filter((b) => {
-    if (b.status !== 'CHECKED_OUT' || !b.checkedOutAt) return false;
-    const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
-    return checkoutDate >= shiftStart && checkoutDate < shiftEnd;
+  const currentUid = currentUser?.uid || currentUser?.id;
+
+  const dailyTransactions: {
+    id: string;
+    type: 'CHECKOUT' | 'UPFRONT';
+    booking: Booking;
+    guestName: string;
+    roomId: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+    operatorName: string;
+    time: string;
+    timestamp: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    details: string;
+    consumptionsTotal?: number;
+    discount?: number;
+  }[] = [];
+
+  bookings.forEach((b) => {
+    // 1. Check if checkout transaction is during this shift & operator
+    if (b.status === 'CHECKED_OUT' && b.checkedOutAt) {
+      const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
+      if (checkoutDate >= shiftStart && checkoutDate < shiftEnd) {
+        const checkoutOperatorUid = b.checkedOutBy?.uid || b.createdBy?.uid;
+        // Only show operations realized on the login of each collaborator
+        if (checkoutOperatorUid === currentUid) {
+          const consumptionsTotal = b.consumptions?.reduce((s, c) => s + (c.price * c.quantity), 0) || 0;
+          const finalTotal = b.finalTotal !== undefined ? b.finalTotal : getBookingFinalTotal(b);
+          
+          dailyTransactions.push({
+            id: `checkout_${b.id}`,
+            type: 'CHECKOUT',
+            booking: b,
+            guestName: b.guestName || 'Hóspede',
+            roomId: b.roomId || '',
+            amount: finalTotal,
+            paymentMethod: b.paymentMethod || 'DINHEIRO',
+            operatorName: b.checkedOutBy?.name || b.createdBy?.name || 'Sistema',
+            time: checkoutDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: b.checkedOutAt,
+            details: 'Checkout de Estadia',
+            consumptionsTotal,
+            discount: b.discount || 0
+          });
+        }
+      }
+    }
+
+    // 2. Check if upfront payment is during this shift & operator
+    if (b.upfrontPaid && b.upfrontPaidAt) {
+      const upfrontDate = b.upfrontPaidAt.toDate ? b.upfrontPaidAt.toDate() : new Date(b.upfrontPaidAt);
+      if (upfrontDate >= shiftStart && upfrontDate < shiftEnd) {
+        const upfrontOperatorUid = b.upfrontPaidBy?.uid;
+        if (upfrontOperatorUid === currentUid) {
+          dailyTransactions.push({
+            id: `upfront_${b.id}`,
+            type: 'UPFRONT',
+            booking: b,
+            guestName: b.guestName || 'Hóspede',
+            roomId: b.roomId || '',
+            amount: b.upfrontPaymentAmount || 0,
+            paymentMethod: b.upfrontPaymentMethod || 'PIX',
+            operatorName: b.upfrontPaidBy?.name || 'Sistema',
+            time: upfrontDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: b.upfrontPaidAt,
+            details: 'Pagamento Antecipado (Início)',
+            consumptionsTotal: 0,
+            discount: 0
+          });
+        }
+      }
+    }
   });
 
-  // Calculate totals by payment method
-  const totals = dailyBookings.reduce(
-    (acc, b) => {
-      const value = getBookingFinalTotal(b);
-      const method = b.paymentMethod || 'DINHEIRO';
+  // Sort dailyTransactions by time
+  dailyTransactions.sort((a, b) => {
+    const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : new Date(a.timestamp).getTime();
+    const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : new Date(b.timestamp).getTime();
+    return timeA - timeB;
+  });
+
+  // Calculate totals by payment method from transactions
+  const totals = dailyTransactions.reduce(
+    (acc, tx) => {
+      const value = tx.amount;
+      const method = tx.paymentMethod || 'DINHEIRO';
       if (method === 'DINHEIRO') acc.DINHEIRO += value;
       else if (method === 'PIX') acc.PIX += value;
       else if (method === 'DEBITO') acc.DEBITO += value;
@@ -121,7 +196,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
     { DINHEIRO: 0, PIX: 0, DEBITO: 0, CREDITO: 0, total: 0 }
   );
 
-  const isZeroClosing = dailyBookings.length === 0;
+  const isZeroClosing = dailyTransactions.length === 0;
 
   // Check if a closing is already officialised for this date and shift
   const currentClosingRecord = closingsHistory.find((c) => c.date === selectedDate && c.shift === selectedShift);
@@ -149,6 +224,23 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
       };
 
       await setDoc(doc(db, 'cashierClosings', closingId), payload);
+
+      // Create a statusLog entry for the global logs
+      const logRef = doc(collection(db, 'statusLogs'));
+      await setDoc(logRef, {
+        id: logRef.id,
+        type: 'CASHIER_CLOSING',
+        shift: selectedShift || 'DIURNO',
+        date: selectedDate || '',
+        totalRevenue: Number(totals.total) || 0,
+        updatedBy: {
+          uid: currentUser.uid || currentUser.id || 'unknown',
+          email: currentUser.email || null,
+          name: currentUserProfile?.name || currentUser.name || currentUser.displayName || 'Colaborador',
+        },
+        timestamp: new Date().toISOString()
+      });
+
       setSaveStatus('SUCCESS');
       setObservations('');
       setTimeout(() => setSaveStatus('IDLE'), 3000);
@@ -412,7 +504,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                   </div>
                   <h3 className="text-4xl font-serif text-brand-cream mb-2 leading-tight">CAIXA DE TURNO ZERADO</h3>
                   <p className="text-sm text-slate-400 italic">
-                    Não houve nenhum checkout registrado no turno {selectedShift === 'DIURNO' ? 'Diurno (07h às 19h)' : 'Noturno (19h às 07h)'} de {formattedDate(selectedDate)}.
+                    Não houve nenhuma operação financeira registrada sob seu login no turno {selectedShift === 'DIURNO' ? 'Diurno (07h às 19h)' : 'Noturno (19h às 07h)'} de {formattedDate(selectedDate)}.
                   </p>
                 </div>
                 <div className="p-6 bg-red-500/5 border border-red-500/10 rounded-2xl text-center md:w-48">
@@ -428,19 +520,19 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                   </div>
                   <h3 className="text-5xl font-serif text-brand-cream font-bold">R$ {totals.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
                   <p className="text-sm text-slate-400 italic mt-2">
-                    Somatória dos {dailyBookings.length} checkouts finalizados no turno {selectedShift === 'DIURNO' ? 'Diurno (07h às 19h)' : 'Noturno (19h às 07h)'} de {formattedDate(selectedDate)}.
+                    Somatória das {dailyTransactions.length} operações financeiras realizadas no seu login durante o turno {selectedShift === 'DIURNO' ? 'Diurno (07h às 19h)' : 'Noturno (19h às 07h)'} de {formattedDate(selectedDate)}.
                   </p>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                   <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl text-center min-w-[110px]">
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">Checkouts</p>
-                    <p className="text-xl font-bold font-serif text-brand-gold mt-1">{dailyBookings.length}</p>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">Operações</p>
+                    <p className="text-xl font-bold font-serif text-brand-gold mt-1">{dailyTransactions.length}</p>
                   </div>
                   <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl text-center min-w-[110px]">
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">Quartos Líquidos</p>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">Quartos Atend.</p>
                     <p className="text-xl font-bold font-serif text-emerald-400 mt-1">
-                      {new Set(dailyBookings.map(b => b.roomId)).size} unidades
+                      {new Set(dailyTransactions.map(tx => tx.roomId)).size} unidades
                     </p>
                   </div>
                 </div>
@@ -461,7 +553,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
               </div>
               <p className="text-xl font-serif text-brand-cream">R$ {totals.DINHEIRO.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p className="text-[9px] text-slate-500 font-mono mt-1">
-                {dailyBookings.filter(b => b.paymentMethod === 'DINHEIRO').length} checkouts
+                {dailyTransactions.filter(tx => tx.paymentMethod === 'DINHEIRO').length} transações
               </p>
             </div>
 
@@ -475,7 +567,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
               </div>
               <p className="text-xl font-serif text-brand-cream">R$ {totals.PIX.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p className="text-[9px] text-slate-500 font-mono mt-1">
-                {dailyBookings.filter(b => b.paymentMethod === 'PIX').length} checkouts
+                {dailyTransactions.filter(tx => tx.paymentMethod === 'PIX').length} transações
               </p>
             </div>
 
@@ -489,7 +581,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
               </div>
               <p className="text-xl font-serif text-brand-cream">R$ {totals.DEBITO.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p className="text-[9px] text-slate-500 font-mono mt-1">
-                {dailyBookings.filter(b => b.paymentMethod === 'DEBITO').length} checkouts
+                {dailyTransactions.filter(tx => tx.paymentMethod === 'DEBITO').length} transações
               </p>
             </div>
 
@@ -503,7 +595,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
               </div>
               <p className="text-xl font-serif text-brand-cream">R$ {totals.CREDITO.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               <p className="text-[9px] text-slate-500 font-mono mt-1">
-                {dailyBookings.filter(b => b.paymentMethod === 'CREDITO').length} checkouts
+                {dailyTransactions.filter(tx => tx.paymentMethod === 'CREDITO').length} transações
               </p>
             </div>
 
@@ -513,12 +605,12 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
           <div className="bg-brand-slate p-8 rounded-[32px] border border-white/5">
             <h4 className="text-lg font-serif text-brand-cream mb-6 flex items-center gap-2">
               <Receipt className="text-[#fccf14]" size={20} />
-              Transações Detalhadas do Dia ({dailyBookings.length})
+              Transações Detalhadas do Dia ({dailyTransactions.length})
             </h4>
 
             {isZeroClosing ? (
               <div className="py-12 text-center text-slate-600 italic text-sm border-2 border-dashed border-white/5 rounded-2xl">
-                Nenhum checkout realizado em {formattedDate(selectedDate)}.
+                Nenhuma transação financeira registrada por seu login em {formattedDate(selectedDate)}.
                 <p className="text-xs text-slate-500 mt-1 not-italic">O dia fechou zerado.</p>
               </div>
             ) : (
@@ -526,55 +618,52 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-xs text-slate-500 uppercase tracking-widest border-b border-white/5">
-                      <th className="pb-4 font-black">Hóspede / Booking</th>
-                      <th className="pb-4 font-black">Check-out</th>
-                      <th className="pb-4 font-black">Recepcionista</th>
-                      <th className="pb-4 font-black">Método</th>
+                      <th className="pb-4 font-black">Hóspede / Unidade</th>
+                      <th className="pb-4 font-black font-sans">Horário</th>
+                      <th className="pb-4 font-black">Operador</th>
+                      <th className="pb-4 font-black">Método / Tipo</th>
                       <th className="pb-4 text-right font-black">Valores</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {dailyBookings.map((b) => {
-                      const consumptionsTotal = b.consumptions?.reduce((s, c) => s + (c.price * c.quantity), 0) || 0;
-                      const discount = b.discount || 0;
-                      const finalTotal = getBookingFinalTotal(b);
-                      const outTime = b.checkedOutAt?.toDate 
-                        ? b.checkedOutAt.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
-                        : '—';
-
+                    {dailyTransactions.map((tx) => {
+                      const b = tx.booking;
                       return (
-                        <tr key={b.id} className="text-sm border-b border-white/[0.02]">
+                        <tr key={tx.id} className="text-sm border-b border-white/[0.02]">
                           <td className="py-4">
-                            <p className="font-serif text-brand-cream text-base">{b.guestName}</p>
+                            <p className="font-serif text-brand-cream text-base">{tx.guestName}</p>
                             <span className="text-[10px] text-slate-500 uppercase tracking-wide">
-                              Quarto {b.roomId ? b.roomId.replace('room_', '') : ''} • {b.source || 'DIRECT'}
+                              Quarto {tx.roomId ? tx.roomId.replace('room_', '') : ''} • {b.source || 'DIRECT'}
                             </span>
                           </td>
                           <td className="py-4 text-slate-400">
                             <span className="flex items-center gap-1 text-xs">
                               <Clock size={12} className="text-brand-gold" />
-                              {outTime}
+                              {tx.time}
                             </span>
                           </td>
                           <td className="py-4 text-slate-400 capitalize text-xs">
-                            {b.createdBy?.name || '—'}
+                            {tx.operatorName}
                           </td>
                           <td className="py-4">
                             <span className={`text-[9px] font-black tracking-widest uppercase px-2 py-1 rounded-md ${
-                              b.paymentMethod === 'DINHEIRO' ? 'bg-emerald-500/10 text-emerald-400' :
-                              b.paymentMethod === 'PIX' ? 'bg-sky-500/10 text-sky-400' :
+                              tx.paymentMethod === 'DINHEIRO' ? 'bg-emerald-500/10 text-emerald-400' :
+                              tx.paymentMethod === 'PIX' ? 'bg-sky-500/10 text-sky-400' :
                               'bg-purple-500/10 text-purple-400'
                             }`}>
-                              {b.paymentMethod}
+                              {tx.paymentMethod}
+                            </span>
+                            <span className="block text-[8px] text-slate-500 mt-1.5 uppercase font-black tracking-widest">
+                              {tx.type === 'UPFRONT' ? 'Adiantamento' : 'Check-out'}
                             </span>
                           </td>
-                          <td className="py-4 text-right">
-                            <p className="font-mono text-brand-cream font-bold">R$ {finalTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                            {consumptionsTotal > 0 && (
-                              <span className="text-[8px] text-slate-500 uppercase">Estadia + R$ {consumptionsTotal} cons.</span>
+                          <td className="py-4 text-right border-l-0">
+                            <p className="font-mono text-brand-cream font-bold">R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            {tx.consumptionsTotal !== undefined && tx.consumptionsTotal > 0 && (
+                              <span className="text-[8px] text-slate-500 uppercase block">Estadia + R$ {tx.consumptionsTotal} cons.</span>
                             )}
-                            {discount > 0 && (
-                              <span className="text-[8px] text-red-400 block">-R$ {discount} desc.</span>
+                            {tx.discount !== undefined && tx.discount > 0 && (
+                              <span className="text-[8px] text-red-400 block">-R$ {tx.discount} desc.</span>
                             )}
                           </td>
                         </tr>
@@ -776,22 +865,59 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
 
                   {/* Associated checkouts */}
                   {!selectedReceipt.wasZero && (
-                    <div className="text-[9px] space-y-1 pb-4 border-b border-gray-200 mb-4 max-h-48 overflow-hidden [content-visibility:auto]">
-                      <p className="font-bold text-[10px] uppercase mb-1">Checkouts Incluídos</p>
+                    <div className="text-[9px] space-y-1 pb-4 border-b border-gray-200 mb-4 max-h-96">
+                      <p className="font-bold text-[10px] uppercase mb-1 border-b border-gray-150 pb-0.5">Transações Incluídas</p>
                       {(() => {
                         const { start: rStart, end: rEnd } = getShiftPeriod(selectedReceipt.date, selectedReceipt.shift);
-                        return bookings
-                          .filter(b => {
-                            if (b.status !== 'CHECKED_OUT' || !b.checkedOutAt) return false;
+                        const receiptOperatorUid = selectedReceipt.closedByUid;
+                        
+                        const printTxList: {
+                          desc: string;
+                          amount: number;
+                          method: string;
+                          typeLabel: string;
+                        }[] = [];
+
+                        bookings.forEach((b) => {
+                          if (b.status === 'CHECKED_OUT' && b.checkedOutAt) {
                             const co = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
-                            return co >= rStart && co < rEnd;
-                          })
-                          .map((b, i) => (
-                            <div key={i} className="flex justify-between text-gray-700">
-                              <span>Qto {b.roomId ? b.roomId.replace('room_', '') : ''} - {b.guestName?.substring(0, 16)}</span>
-                              <span>R$ {getBookingFinalTotal(b).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                          ));
+                            if (co >= rStart && co < rEnd) {
+                              const checkoutOperatorUid = b.checkedOutBy?.uid || b.createdBy?.uid;
+                              if (checkoutOperatorUid === receiptOperatorUid) {
+                                const amount = b.finalTotal !== undefined ? b.finalTotal : getBookingFinalTotal(b);
+                                printTxList.push({
+                                  desc: `Qto ${b.roomId ? b.roomId.replace('room_', '') : ''} - ${b.guestName?.substring(0, 14)}`,
+                                  amount,
+                                  method: b.paymentMethod || 'DINHEIRO',
+                                  typeLabel: 'Checkout'
+                                });
+                              }
+                            }
+                          }
+                          if (b.upfrontPaid && b.upfrontPaidAt) {
+                            const up = b.upfrontPaidAt.toDate ? b.upfrontPaidAt.toDate() : new Date(b.upfrontPaidAt);
+                            if (up >= rStart && up < rEnd) {
+                              const upfrontOperatorUid = b.upfrontPaidBy?.uid;
+                              if (upfrontOperatorUid === receiptOperatorUid) {
+                                printTxList.push({
+                                  desc: `Qto ${b.roomId ? b.roomId.replace('room_', '') : ''} - ${b.guestName?.substring(0, 14)}`,
+                                  amount: b.upfrontPaymentAmount || 0,
+                                  method: b.upfrontPaymentMethod || 'PIX',
+                                  typeLabel: 'Adiantam.'
+                                });
+                              }
+                            }
+                          }
+                        });
+
+                        return printTxList.map((tx, i) => (
+                          <div key={i} className="flex justify-between items-center text-gray-700 py-0.5 border-b border-gray-100 last:border-0 font-sans text-[9px]">
+                            <span>{tx.desc} <span className="text-[7px] text-gray-400 font-mono">({tx.typeLabel})</span></span>
+                            <span className="font-mono text-[9px] font-bold text-gray-950">
+                              R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} <span className="text-[7px] text-gray-500 font-sans">[{tx.method}]</span>
+                            </span>
+                          </div>
+                        ));
                       })()}
                     </div>
                   )}

@@ -41,7 +41,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   
   const discount = Number(discountValue) || 0;
   const subtotal = stayTotal + consumptionsTotal;
-  const grandTotal = Math.max(0, subtotal - discount);
+  const upfrontAmt = booking.upfrontPaid ? (Number(booking.upfrontPaymentAmount) || 0) : 0;
+  const grandTotal = Math.max(0, subtotal - upfrontAmt - discount);
 
   const handleSelectPayment = async (method: PaymentMethod) => {
     setIsSubmitting(true);
@@ -115,11 +116,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <span className="text-slate-300 font-mono italic">R$ {stayTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xs uppercase tracking-widest">
+                <div className="flex justify-between text-xs uppercase tracking-widest border-t border-white/5 pt-3">
                   <span className="text-slate-500 font-bold">Total Consumo</span>
                   <span className="text-slate-300 font-mono italic">R$ {consumptionsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs uppercase tracking-widest pt-2">
+                {booking.upfrontPaid && (
+                  <div className="flex justify-between text-xs uppercase tracking-widest text-emerald-400">
+                    <span className="font-bold">Pago Antecipado ({booking.upfrontPaymentMethod || 'PIX'})</span>
+                    <span className="font-mono italic">- R$ {(booking.upfrontPaymentAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-xs uppercase tracking-widest pt-2 border-t border-white/5">
                   <span className="text-brand-gold font-bold">Desconto Especial</span>
                   <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2 py-1 border border-white/10">
                     <span className="text-slate-500 font-mono">R$</span>

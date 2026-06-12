@@ -6,10 +6,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Booking, Product, BookingStatusLog, Room } from '../types';
+import { Booking, Product, BookingStatusLog, Room, PaymentMethod } from '../types';
 import { formatDisplayDate } from '../lib/dateUtils';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check } from 'lucide-react';
+import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check, DollarSign } from 'lucide-react';
 
 interface ConsumptionModalProps {
   isOpen: boolean;
@@ -20,10 +20,23 @@ interface ConsumptionModalProps {
   onRemoveConsumption: (bookingId: string, consumptionId: string) => Promise<void>;
   onCheckOut: (roomId: string) => Promise<void>;
   onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
-  onUpdateBooking: (bookingId: string, updates: { guestsCount?: number; stayTotal?: number }) => Promise<void>;
+  onUpdateBooking: (bookingId: string, updates: { 
+    guestsCount?: number; 
+    stayTotal?: number;
+    upfrontPaid?: boolean;
+    upfrontPaymentAmount?: number;
+    upfrontPaymentMethod?: PaymentMethod;
+    upfrontPaidAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    upfrontPaidBy?: { uid: string; email: string | null; name: string | null; } | null;
+  }) => Promise<void>;
   onCancelBooking: (bookingId: string) => Promise<void>;
   rooms: Room[];
   onMoveGuest: (bookingId: string, newRoomId: string) => Promise<void>;
+  currentUser?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  } | null;
 }
 
 export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({ 
@@ -38,7 +51,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onUpdateBooking,
   onCancelBooking,
   rooms,
-  onMoveGuest
+  onMoveGuest,
+  currentUser
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
@@ -57,7 +71,14 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [isCancelling, setIsCancelling] = useState(false);
   const [logs, setLogs] = useState<BookingStatusLog[]>([]);
 
+  const [upfrontAmount, setUpfrontAmount] = useState<string>('');
+  const [upfrontMethod, setUpfrontMethod] = useState<PaymentMethod>('PIX');
+  const [isSavingUpfront, setIsSavingUpfront] = useState(false);
+
   const bookingId = booking?.id;
+  const isAirbnb = booking ? booking.source === 'AIRBNB' : false;
+  const stayTotal = booking ? (isAirbnb ? (Number(booking.extraStayCharges) || 0) : (Number(booking.totalPrice) || 0)) : 0;
+  const repasseAirbnb = isAirbnb ? ((Number(booking.totalPrice) || 0) - (Number(booking.extraStayCharges) || 0)) : 0;
 
   useEffect(() => {
     if (!bookingId) {
@@ -85,6 +106,15 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     });
     return () => unsubscribe();
   }, [bookingId]);
+
+  useEffect(() => {
+    if (booking) {
+      const targetAmount = booking.upfrontPaymentAmount !== undefined ? booking.upfrontPaymentAmount.toString() : stayTotal.toString();
+      const targetMethod = booking.upfrontPaymentMethod || 'PIX';
+      setUpfrontAmount((prev) => (prev !== targetAmount ? targetAmount : prev)); // eslint-disable-line
+      setUpfrontMethod((prev) => (prev !== targetMethod ? targetMethod : prev));
+    }
+  }, [bookingId, stayTotal, booking]);
 
   if (!isOpen || !booking) return null;
 
@@ -158,13 +188,53 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     }
   };
 
-  const totalConsumido = booking.consumptions?.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0;
-  
-  const isAirbnb = booking.source === 'AIRBNB';
-  const originalAirbnbTotal = (Number(booking.totalPrice) || 0) - (Number(booking.extraStayCharges) || 0);
-  const stayTotal = isAirbnb ? (Number(booking.extraStayCharges) || 0) : (Number(booking.totalPrice) || 0);
-  const repasseAirbnb = isAirbnb ? originalAirbnbTotal : 0;
+  const handleSaveUpfront = async () => {
+    if (!booking) return;
+    setIsSavingUpfront(true);
+    try {
+      const amount = parseFloat(upfrontAmount) || 0;
+      await onUpdateBooking(booking.id, {
+        upfrontPaid: true,
+        upfrontPaymentAmount: amount,
+        upfrontPaymentMethod: upfrontMethod,
+        upfrontPaidAt: new Date().toISOString(),
+        upfrontPaidBy: currentUser ? {
+          uid: currentUser.uid,
+          email: currentUser.email || null,
+          name: currentUser.name || currentUser.email?.split('@')[0] || 'Desconhecido'
+        } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' }
+      });
+    } catch (error) {
+      console.error("Erro ao salvar pagamento antecipado:", error);
+    } finally {
+      setIsSavingUpfront(false);
+    }
+  };
+
+  const handleResetUpfront = async () => {
+    if (!booking) return;
+    if (window.confirm("Certeza que deseja estornar/cancelar este pagamento antecipado?")) {
+      setIsSavingUpfront(true);
+      try {
+        await onUpdateBooking(booking.id, {
+          upfrontPaid: false,
+          upfrontPaymentAmount: 0,
+          upfrontPaymentMethod: 'PIX',
+          upfrontPaidAt: null,
+          upfrontPaidBy: null
+        });
+      } catch (error) {
+        console.error("Erro ao estornar pagamento antecipado:", error);
+      } finally {
+        setIsSavingUpfront(false);
+      }
+    }
+  };
+
+  const totalConsumido = booking ? (booking.consumptions?.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
   const grandTotal = totalConsumido + stayTotal;
+  const upfrontAmt = booking?.upfrontPaid ? (Number(booking.upfrontPaymentAmount) || 0) : 0;
+  const finalGrandTotal = Math.max(0, grandTotal - upfrontAmt);
 
   return (
     <AnimatePresence>
@@ -380,6 +450,89 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  <div className="pt-4 mt-2 border-t border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-brand-gold tracking-widest flex items-center gap-1.5">
+                        <DollarSign size={12} />
+                        Pagamento Antecipado (No Início)
+                      </span>
+                      {booking.upfrontPaid ? (
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full">
+                          Pago
+                        </span>
+                      ) : (
+                        <span className="bg-slate-500/10 text-slate-400 border border-slate-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full">
+                          Não Registrado
+                        </span>
+                      )}
+                    </div>
+
+                    {!booking.upfrontPaid ? (
+                      <div className="space-y-3 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Valor Recebido (R$)</label>
+                            <input 
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder={stayTotal.toFixed(2)}
+                              value={upfrontAmount}
+                              onChange={(e) => setUpfrontAmount(e.target.value)}
+                              className="w-full bg-white/5 border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-brand-gold/70"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
+                            <select 
+                              value={upfrontMethod}
+                              onChange={(e) => setUpfrontMethod(e.target.value as PaymentMethod)}
+                              className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                            >
+                              <option value="DINHEIRO">Dinheiro</option>
+                              <option value="PIX">PIX</option>
+                              <option value="DEBITO">Débito</option>
+                              <option value="CREDITO">Crédito</option>
+                            </select>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={handleSaveUpfront}
+                          disabled={isSavingUpfront}
+                          className="w-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 border border-emerald-500/10 transition-colors rounded-xl py-2 text-[9px] uppercase font-black tracking-wider flex items-center justify-center gap-1"
+                        >
+                          {isSavingUpfront ? 'Salvando...' : 'Confirmar Recebimento'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-500/[0.02] p-3.5 rounded-2xl border border-emerald-500/10 text-xs text-brand-cream space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Valor Pago Antecipado:</span>
+                          <span className="font-bold text-emerald-450 font-mono">
+                            R$ {Number(booking.upfrontPaymentAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Forma de Pagamento:</span>
+                          <span className="font-bold text-brand-gold text-xs">{booking.upfrontPaymentMethod || 'PIX'}</span>
+                        </div>
+                        {booking.upfrontPaidBy && (
+                          <div className="flex justify-between text-[10px] text-slate-500">
+                            <span>Processado por:</span>
+                            <span>{booking.upfrontPaidBy.name}</span>
+                          </div>
+                        )}
+                        <button 
+                          onClick={handleResetUpfront}
+                          disabled={isSavingUpfront}
+                          className="w-full text-slate-500 hover:text-red-450 text-[8px] uppercase tracking-widest font-black pt-2 transition-colors border-t border-white/5 block text-center"
+                        >
+                          Cancelar Pagamento Antecipado
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -510,13 +663,19 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       <span className="text-brand-gold">R$ {repasseAirbnb.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
+                  {booking && booking.upfrontPaid && (
+                    <div className="flex justify-between text-[10px] text-emerald-400 font-black uppercase tracking-widest">
+                      <span>Pgto Antecipado ({booking.upfrontPaymentMethod || 'PIX'})</span>
+                      <span>- R$ {upfrontAmt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   <div className="pt-4 flex justify-between items-end">
                     <div className="flex items-center gap-2 text-brand-gold">
                       <CreditCard size={18} />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Total Geral</span>
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">{booking && booking.upfrontPaid ? 'Saldo Restante' : 'Total Geral'}</span>
                     </div>
                     <span className="text-3xl font-serif text-brand-cream">
-                      R$ {grandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      R$ {finalGrandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

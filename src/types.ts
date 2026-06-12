@@ -68,7 +68,21 @@ export interface Booking {
   discount?: number;
   extraStayCharges?: number;
   checkedOutAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  checkedOutBy?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  };
   createdBy?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  };
+  upfrontPaid?: boolean;
+  upfrontPaymentAmount?: number;
+  upfrontPaymentMethod?: PaymentMethod;
+  upfrontPaidAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  upfrontPaidBy?: {
     uid: string;
     email: string | null;
     name: string | null;
@@ -87,10 +101,14 @@ export interface AppUser {
 
 export interface BookingStatusLog {
   id: string;
-  bookingId: string;
+  bookingId?: string;
   roomId?: string;
-  previousStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED' | 'NONE';
-  newStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+  previousStatus?: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED' | 'NONE';
+  newStatus?: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+  type?: 'STATUS_CHANGE' | 'CASHIER_CLOSING';
+  shift?: 'DIURNO' | 'NOTURNO';
+  date?: string;
+  totalRevenue?: number;
   updatedBy: {
     uid: string;
     email: string | null;
