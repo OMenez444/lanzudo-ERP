@@ -90,6 +90,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [consumptionPaymentType, setConsumptionPaymentType] = useState<'ROOM_TAB' | 'PAID_NOW'>('ROOM_TAB');
   const [consumptionPaymentMethod, setConsumptionPaymentMethod] = useState<PaymentMethod>('PIX');
   const [consumptionReceiverUid, setConsumptionReceiverUid] = useState<string>(() => currentUser?.uid || currentUser?.id || '');
+  const [consumptionPaidAmount, setConsumptionPaidAmount] = useState<string>('');
 
   const bookingId = booking?.id;
   const isAirbnb = booking ? booking.source === 'AIRBNB' : false;
@@ -386,38 +387,75 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                   </div>
 
                   {consumptionPaymentType === 'PAID_NOW' && (
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 transition-all">
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
-                        <select 
-                          value={consumptionPaymentMethod}
-                          onChange={(e) => setConsumptionPaymentMethod(e.target.value as PaymentMethod)}
-                          className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
-                        >
-                          <option value="PIX">PIX</option>
-                          <option value="DINHEIRO">Dinheiro</option>
-                          <option value="DEBITO">Débito</option>
-                          <option value="CREDITO">Crédito</option>
-                        </select>
+                    <div className="space-y-3 pt-2 border-t border-white/5 transition-all">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
+                          <select 
+                            value={consumptionPaymentMethod}
+                            onChange={(e) => {
+                              setConsumptionPaymentMethod(e.target.value as PaymentMethod);
+                              setConsumptionPaidAmount('');
+                            }}
+                            className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                          >
+                            <option value="PIX">PIX</option>
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="DEBITO">Débito</option>
+                            <option value="CREDITO">Crédito</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Operador)</label>
+                          <select 
+                            value={consumptionReceiverUid}
+                            onChange={(e) => setConsumptionReceiverUid(e.target.value)}
+                            className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                          >
+                            {users && users.length > 0 ? (
+                              users.map((u) => (
+                                <option key={u.uid || u.id} value={u.uid || u.id}>
+                                  {u.name || u.email?.split('@')[0]}
+                                </option>
+                              ))
+                            ) : (
+                              currentUser && <option value={currentUser.uid || currentUser.id}>{currentUser.name || currentUser.email}</option>
+                            )}
+                          </select>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Operador)</label>
-                        <select 
-                          value={consumptionReceiverUid}
-                          onChange={(e) => setConsumptionReceiverUid(e.target.value)}
-                          className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
-                        >
-                          {users && users.length > 0 ? (
-                            users.map((u) => (
-                              <option key={u.uid || u.id} value={u.uid || u.id}>
-                                {u.name || u.email?.split('@')[0]}
-                              </option>
-                            ))
-                          ) : (
-                            currentUser && <option value={currentUser.uid || currentUser.id}>{currentUser.name || currentUser.email}</option>
-                          )}
-                        </select>
-                      </div>
+
+                      {consumptionPaymentMethod === 'DINHEIRO' && (
+                        <div className="bg-white/[0.01] border border-white/5 p-3 rounded-2xl flex justify-between items-center gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Valor Entregue</label>
+                            <div className="flex items-center gap-1 bg-brand-bg rounded-lg px-2 py-1 border border-white/5">
+                              <span className="text-slate-500 text-[10px] font-mono">R$</span>
+                              <input 
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={consumptionPaidAmount}
+                                onChange={(e) => setConsumptionPaidAmount(e.target.value)}
+                                className="w-16 bg-transparent text-emerald-400 font-mono focus:outline-none text-xs font-bold text-right"
+                              />
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Troco a Voltar</span>
+                            <span className="text-xs font-bold text-brand-gold font-mono block mt-1">
+                              {(() => {
+                                const total = selectedProductId ? ((products.find(p => p.id === selectedProductId)?.price || 0) * quantity) : 0;
+                                const paid = parseFloat(consumptionPaidAmount.replace(',', '.')) || 0;
+                                const change = paid - total;
+                                return change > 0 
+                                  ? `R$ ${change.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                                  : 'R$ 0,00';
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

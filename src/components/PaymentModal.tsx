@@ -25,6 +25,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [discountValue, setDiscountValue] = useState<string>('0');
+  const [cashReceived, setCashReceived] = useState<string>('');
 
   if (!isOpen || !booking) return null;
 
@@ -141,9 +142,38 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-6 flex justify-between items-end">
+              <div className="pt-6 flex justify-between items-end mb-4">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold">Valor Final</span>
                 <span className="text-4xl font-serif text-brand-cream italic">R$ {grandTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+
+              <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-4 items-center">
+                <div className="space-y-1">
+                  <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Valor Recebido (Dinheiro)</label>
+                  <div className="flex items-center gap-1.5 bg-brand-bg rounded-xl px-2.5 py-1.5 border border-white/10">
+                    <span className="text-slate-500 text-xs font-mono">R$</span>
+                    <input 
+                      type="text" 
+                      inputMode="decimal"
+                      value={cashReceived}
+                      onChange={(e) => setCashReceived(e.target.value)}
+                      className="w-full bg-transparent text-emerald-400 font-mono outline-none text-right font-bold text-xs"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Troco a Voltar</span>
+                  <span className="text-sm font-black text-brand-gold font-mono block mt-1">
+                    {(() => {
+                      const received = parseFloat(cashReceived.replace(',', '.')) || 0;
+                      const change = received - grandTotal;
+                      return change > 0 
+                        ? `R$ ${change.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                        : 'R$ 0,00';
+                    })()}
+                  </span>
+                </div>
               </div>
             </div>
 

@@ -16,7 +16,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Booking, CashierClosing, PaymentMethod } from '../types';
+import { Booking, CashierClosing, PaymentMethod, Consumption } from '../types';
 
 interface CashierClosingViewProps {
   bookings: Booking[];
@@ -202,6 +202,33 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
           }
         }
       });
+    }
+  });
+
+  // Get active bookings with pending consumptions (room tab)
+  const activeUnpaidConsumptions: {
+    bookingId: string;
+    roomId: string;
+    guestName: string;
+    itemsCount: number;
+    totalAmount: number;
+    consumptions: Consumption[];
+  }[] = [];
+
+  bookings.forEach((b) => {
+    if (b.status === 'CONFIRMED') {
+      const unpaidList = b.consumptions?.filter(c => !c.isPaidImmediate) || [];
+      if (unpaidList.length > 0) {
+        const totalAmount = unpaidList.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+        activeUnpaidConsumptions.push({
+          bookingId: b.id,
+          roomId: b.roomId || '',
+          guestName: b.guestName || 'Hóspede',
+          itemsCount: unpaidList.reduce((acc, c) => acc + c.quantity, 0),
+          totalAmount,
+          consumptions: unpaidList
+        });
+      }
     }
   });
 
@@ -727,6 +754,76 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Consumos Lançados em Conta (Pendentes nos Quartos) */}
+          <div className="bg-brand-slate p-8 rounded-[32px] border border-white/5 hover:border-brand-gold/15 transition-all mt-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <span className="text-[10px] text-brand-gold/70 uppercase font-black tracking-widest mb-1 block">Controle e Auditoria</span>
+                <h4 className="text-xl font-serif text-brand-cream flex items-center gap-2">
+                  <Receipt className="text-brand-gold" size={20} />
+                  Consumos Lançados em Conta (Pendentes nos Quartos)
+                </h4>
+              </div>
+              <div className="bg-brand-bg px-4 py-2 rounded-2xl border border-white/5 flex items-center gap-3">
+                <span className="text-[10px] uppercase text-slate-500 font-extrabold tracking-widest">Total Pendente Acumulado:</span>
+                <span className="text-sm font-bold text-brand-gold font-mono">
+                  R$ {activeUnpaidConsumptions.reduce((sum, item) => sum + item.totalAmount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed mb-6 bg-white/[0.01] border border-white/5 p-4 rounded-2xl">
+              💡 <strong>Atenção:</strong> Estes itens foram lançados com a opção <span className="text-brand-gold font-bold">"Pendurar no Quarto"</span> para hóspedes que ainda estão hospedados. Eles <strong>não entram no caixa de hoje</strong> porque o pagamento de fato só será efetuado e recebido no momento do <strong>Check-out</strong> (quando a conta total do quarto for fechada). Esta lista serve para você conferir de forma auditada todos os consumos em aberto registrados no hotel.
+            </p>
+
+            {activeUnpaidConsumptions.length === 0 ? (
+              <div className="py-8 text-center text-slate-550 italic text-sm border-2 border-dashed border-white/5 rounded-2xl">
+                Nenhum consumo pendente nos quartos ativos no momento. Todos os consumos lançados foram pagos no ato ou já foram finalizados no checkout.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-widest border-b border-white/5">
+                      <th className="pb-4 font-black">Hóspede / Quarto</th>
+                      <th className="pb-4 font-black">Itens Lançados</th>
+                      <th className="pb-4 font-black text-center">Qtd Total</th>
+                      <th className="pb-4 text-right font-black">Valor Pendente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeUnpaidConsumptions.map((item) => (
+                      <tr key={item.bookingId} className="text-sm border-b border-white/[0.02] hover:bg-white/[0.01]/30 transition-colors">
+                        <td className="py-4">
+                          <p className="font-serif text-brand-cream text-base">{item.guestName}</p>
+                          <span className="text-[10px] text-brand-gold uppercase tracking-wider font-extrabold">
+                            Quarto {item.roomId ? item.roomId.replace('room_', '') : ''}
+                          </span>
+                        </td>
+                        <td className="py-4 text-slate-300 text-xs max-w-xs">
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.consumptions.map((c, idx) => (
+                              <span key={idx} className="bg-white/5 border border-white/5 px-2 py-1 rounded-lg text-[10px] font-mono text-slate-300">
+                                {c.productName} ({c.quantity}x • R$ {c.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-4 text-center text-slate-400 font-mono font-bold">
+                          {item.itemsCount}x
+                        </td>
+                        <td className="py-4 text-right">
+                          <p className="font-mono text-brand-gold font-bold text-base">R$ {item.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <span className="text-[8px] text-emerald-400 font-extrabold uppercase tracking-widest block mt-0.5">Aguardando Checkout</span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
