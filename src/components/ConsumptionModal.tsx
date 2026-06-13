@@ -89,7 +89,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const [consumptionPaymentType, setConsumptionPaymentType] = useState<'ROOM_TAB' | 'PAID_NOW'>('ROOM_TAB');
   const [consumptionPaymentMethod, setConsumptionPaymentMethod] = useState<PaymentMethod>('PIX');
-  const [consumptionReceiverUid, setConsumptionReceiverUid] = useState<string>(() => currentUser?.uid || '');
+  const [consumptionReceiverUid, setConsumptionReceiverUid] = useState<string>(() => currentUser?.uid || currentUser?.id || '');
 
   const bookingId = booking?.id;
   const isAirbnb = booking ? booking.source === 'AIRBNB' : false;
@@ -130,7 +130,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       setUpfrontAmount((prev) => (prev !== targetAmount ? targetAmount : prev)); // eslint-disable-line
       setUpfrontMethod((prev) => (prev !== targetMethod ? targetMethod : prev));
       
-      const targetReceiverUid = booking.upfrontPaidBy?.uid || currentUser?.uid || '';
+      const targetReceiverUid = booking.upfrontPaidBy?.uid || booking.upfrontPaidBy?.id || currentUser?.uid || currentUser?.id || '';
       setUpfrontReceiverUid((prev) => (prev !== targetReceiverUid ? targetReceiverUid : prev));
     }
   }, [bookingId, stayTotal, booking, currentUser]);
@@ -144,8 +144,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     setIsSubmitting(true);
     try {
       const isPaidImmediate = consumptionPaymentType === 'PAID_NOW';
-      const paidByUid = isPaidImmediate ? (consumptionReceiverUid || currentUser?.uid) : undefined;
-      const paidUser = paidByUid ? (users?.find(u => u.uid === paidByUid) || currentUser) : null;
+      const paidByUid = isPaidImmediate ? (consumptionReceiverUid || currentUser?.uid || currentUser?.id) : undefined;
+      const paidUser = paidByUid ? (users?.find(u => (u.uid === paidByUid || u.id === paidByUid)) || currentUser) : null;
       const paidByInfo = paidUser ? {
         uid: paidUser.uid || paidUser.id || 'system',
         email: paidUser.email || null,
@@ -227,13 +227,13 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     try {
       const amount = parseFloat(upfrontAmount) || 0;
       
-      const selectedUser = users?.find(u => u.uid === upfrontReceiverUid);
+      const selectedUser = users?.find(u => u.uid === upfrontReceiverUid || u.id === upfrontReceiverUid);
       const receiverInfo = selectedUser ? {
-        uid: selectedUser.uid,
+        uid: selectedUser.uid || selectedUser.id,
         email: selectedUser.email || null,
         name: selectedUser.name || selectedUser.email?.split('@')[0] || 'Desconhecido'
       } : (currentUser ? {
-        uid: currentUser.uid,
+        uid: currentUser.uid || currentUser.id || 'unknown',
         email: currentUser.email || null,
         name: currentUser.name || currentUser.email?.split('@')[0] || 'Desconhecido'
       } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' });
@@ -409,12 +409,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         >
                           {users && users.length > 0 ? (
                             users.map((u) => (
-                              <option key={u.uid} value={u.uid}>
+                              <option key={u.uid || u.id} value={u.uid || u.id}>
                                 {u.name || u.email?.split('@')[0]}
                               </option>
                             ))
                           ) : (
-                            currentUser && <option value={currentUser.uid}>{currentUser.name || currentUser.email}</option>
+                            currentUser && <option value={currentUser.uid || currentUser.id}>{currentUser.name || currentUser.email}</option>
                           )}
                         </select>
                       </div>
@@ -615,12 +615,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                           >
                             {users && users.length > 0 ? (
                               users.filter(u => u.status === 'ACTIVE').map(u => (
-                                <option key={u.uid} value={u.uid} className="bg-brand-slate text-white">
+                                <option key={u.uid || u.id} value={u.uid || u.id} className="bg-brand-slate text-white">
                                   {u.name || u.email?.split('@')[0]}
                                 </option>
                               ))
                             ) : (
-                              <option value={currentUser?.uid || ''} className="bg-brand-slate text-white">
+                              <option value={currentUser?.uid || currentUser?.id || ''} className="bg-brand-slate text-white">
                                 {currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário Atual'}
                               </option>
                             )}

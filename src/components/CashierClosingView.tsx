@@ -125,7 +125,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
     if (b.status === 'CHECKED_OUT' && b.checkedOutAt) {
       const checkoutDate = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
       if (checkoutDate >= shiftStart && checkoutDate < shiftEnd) {
-        const checkoutOperatorUid = b.checkedOutBy?.uid || b.createdBy?.uid;
+        const checkoutOperatorUid = b.checkedOutBy?.uid || b.checkedOutBy?.id || b.createdBy?.uid || b.createdBy?.id;
         // Only show operations realized on the login of each collaborator
         if (checkoutOperatorUid === currentUid) {
           const consumptionsTotal = b.consumptions?.reduce((s, c) => s + (c.price * c.quantity), 0) || 0;
@@ -154,7 +154,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
     if (b.upfrontPaid && b.upfrontPaidAt) {
       const upfrontDate = b.upfrontPaidAt.toDate ? b.upfrontPaidAt.toDate() : new Date(b.upfrontPaidAt);
       if (upfrontDate >= shiftStart && upfrontDate < shiftEnd) {
-        const upfrontOperatorUid = b.upfrontPaidBy?.uid;
+        const upfrontOperatorUid = b.upfrontPaidBy?.uid || b.upfrontPaidBy?.id;
         if (upfrontOperatorUid === currentUid) {
           dailyTransactions.push({
             id: `upfront_${b.id}`,
@@ -181,7 +181,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
         if (c.isPaidImmediate && c.paidAt) {
           const paidDate = c.paidAt.toDate ? c.paidAt.toDate() : new Date(c.paidAt);
           if (paidDate >= shiftStart && paidDate < shiftEnd) {
-            const paidOperatorUid = c.paidBy?.uid;
+            const paidOperatorUid = c.paidBy?.uid || c.paidBy?.id;
             if (paidOperatorUid === currentUid) {
               dailyTransactions.push({
                 id: `consumption_${b.id}_${c.id}`,
@@ -971,7 +971,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                           if (b.status === 'CHECKED_OUT' && b.checkedOutAt) {
                             const co = b.checkedOutAt.toDate ? b.checkedOutAt.toDate() : new Date(b.checkedOutAt);
                             if (co >= rStart && co < rEnd) {
-                              const checkoutOperatorUid = b.checkedOutBy?.uid || b.createdBy?.uid;
+                              const checkoutOperatorUid = b.checkedOutBy?.uid || b.checkedOutBy?.id || b.createdBy?.uid || b.createdBy?.id;
                               if (checkoutOperatorUid === receiptOperatorUid) {
                                 const amount = b.finalTotal !== undefined ? b.finalTotal : getBookingFinalTotal(b);
                                 printTxList.push({
@@ -986,7 +986,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                           if (b.upfrontPaid && b.upfrontPaidAt) {
                             const up = b.upfrontPaidAt.toDate ? b.upfrontPaidAt.toDate() : new Date(b.upfrontPaidAt);
                             if (up >= rStart && up < rEnd) {
-                              const upfrontOperatorUid = b.upfrontPaidBy?.uid;
+                              const upfrontOperatorUid = b.upfrontPaidBy?.uid || b.upfrontPaidBy?.id;
                               if (upfrontOperatorUid === receiptOperatorUid) {
                                 printTxList.push({
                                   desc: `Qto ${b.roomId ? b.roomId.replace('room_', '') : ''} - ${b.guestName?.substring(0, 14)}`,
@@ -1002,7 +1002,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                               if (c.isPaidImmediate && c.paidAt) {
                                 const paidDate = c.paidAt.toDate ? c.paidAt.toDate() : new Date(c.paidAt);
                                 if (paidDate >= rStart && paidDate < rEnd) {
-                                  const paidOperatorUid = c.paidBy?.uid;
+                                  const paidOperatorUid = c.paidBy?.uid || c.paidBy?.id;
                                   if (paidOperatorUid === receiptOperatorUid) {
                                     printTxList.push({
                                       desc: `${c.productName} (${c.quantity}x) - Qto ${b.roomId ? b.roomId.replace('room_', '') : ''}`,
