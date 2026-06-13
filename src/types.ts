@@ -47,6 +47,19 @@ export interface Consumption {
   price: number;
   quantity: number;
   timestamp: string;
+  createdBy?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  } | null;
+  isPaidImmediate?: boolean;
+  paymentMethod?: PaymentMethod;
+  paidAt?: string;
+  paidBy?: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  } | null;
 }
 
 export type PaymentMethod = 'DINHEIRO' | 'PIX' | 'DEBITO' | 'CREDITO';

@@ -35,7 +35,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   // O que deve ser pago no balcão de diárias: se for Airbnb, apenas as extensões locais.
   const stayTotal = isAirbnb ? (Number(booking.extraStayCharges) || 0) : (Number(booking.totalPrice) || 0);
   
-  const consumptionsTotal = booking.consumptions?.reduce((acc, curr) => {
+  const consumptionsTotal = booking.consumptions?.filter(c => !c.isPaidImmediate).reduce((acc, curr) => {
     return acc + (Number(curr.price) * Number(curr.quantity));
   }, 0) || 0;
   

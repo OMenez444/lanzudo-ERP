@@ -106,7 +106,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
 
   const dailyTransactions: {
     id: string;
-    type: 'CHECKOUT' | 'UPFRONT';
+    type: 'CHECKOUT' | 'UPFRONT' | 'CONSUMPTION_SALE';
     booking: Booking;
     guestName: string;
     roomId: string;
@@ -173,6 +173,35 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
           });
         }
       }
+    }
+
+    // 3. Check for immediate paid consumptions during this shift & operator
+    if (b.consumptions && b.consumptions.length > 0) {
+      b.consumptions.forEach((c) => {
+        if (c.isPaidImmediate && c.paidAt) {
+          const paidDate = c.paidAt.toDate ? c.paidAt.toDate() : new Date(c.paidAt);
+          if (paidDate >= shiftStart && paidDate < shiftEnd) {
+            const paidOperatorUid = c.paidBy?.uid;
+            if (paidOperatorUid === currentUid) {
+              dailyTransactions.push({
+                id: `consumption_${b.id}_${c.id}`,
+                type: 'CONSUMPTION_SALE',
+                booking: b,
+                guestName: b.guestName || 'Hóspede',
+                roomId: b.roomId || '',
+                amount: (c.price || 0) * (c.quantity || 1),
+                paymentMethod: c.paymentMethod || 'DINHEIRO',
+                operatorName: c.paidBy?.name || 'Sistema',
+                time: paidDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                timestamp: c.paidAt,
+                details: `${c.productName} (${c.quantity}x)`,
+                consumptionsTotal: (c.price || 0) * (c.quantity || 1),
+                discount: 0
+              });
+            }
+          }
+        }
+      });
     }
   });
 
@@ -681,12 +710,14 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                               {tx.paymentMethod}
                             </span>
                             <span className="block text-[8px] text-slate-500 mt-1.5 uppercase font-black tracking-widest">
-                              {tx.type === 'UPFRONT' ? 'Adiantamento' : 'Check-out'}
+                              {tx.type === 'UPFRONT' ? 'Adiantamento' : tx.type === 'CONSUMPTION_SALE' ? 'Venda de Consumo' : 'Check-out'}
                             </span>
                           </td>
                           <td className="py-4 text-right border-l-0">
                             <p className="font-mono text-brand-cream font-bold">R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                            {tx.consumptionsTotal !== undefined && tx.consumptionsTotal > 0 && (
+                            {tx.type === 'CONSUMPTION_SALE' ? (
+                              <span className="text-[8px] text-slate-500 uppercase block">{tx.details}</span>
+                            ) : tx.consumptionsTotal !== undefined && tx.consumptionsTotal > 0 && (
                               <span className="text-[8px] text-slate-500 uppercase block">Estadia + R$ {tx.consumptionsTotal} cons.</span>
                             )}
                             {tx.discount !== undefined && tx.discount > 0 && (
@@ -965,6 +996,24 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                                 });
                               }
                             }
+                          }
+                          if (b.consumptions && b.consumptions.length > 0) {
+                            b.consumptions.forEach((c) => {
+                              if (c.isPaidImmediate && c.paidAt) {
+                                const paidDate = c.paidAt.toDate ? c.paidAt.toDate() : new Date(c.paidAt);
+                                if (paidDate >= rStart && paidDate < rEnd) {
+                                  const paidOperatorUid = c.paidBy?.uid;
+                                  if (paidOperatorUid === receiptOperatorUid) {
+                                    printTxList.push({
+                                      desc: `${c.productName} (${c.quantity}x) - Qto ${b.roomId ? b.roomId.replace('room_', '') : ''}`,
+                                      amount: (c.price || 0) * (c.quantity || 1),
+                                      method: c.paymentMethod || 'DINHEIRO',
+                                      typeLabel: 'Consumo'
+                                    });
+                                  }
+                                }
+                              }
+                            });
                           }
                         });
 

@@ -16,7 +16,16 @@ interface ConsumptionModalProps {
   onClose: () => void;
   booking: Booking | null;
   products: Product[];
-  onAddConsumption: (bookingId: string, product: Product, quantity: number) => Promise<void>;
+  onAddConsumption: (
+    bookingId: string, 
+    product: Product, 
+    quantity: number,
+    paymentOptions?: {
+      isPaidImmediate: boolean;
+      paymentMethod?: PaymentMethod;
+      paidBy?: { uid: string; email: string | null; name: string | null; } | null;
+    }
+  ) => Promise<void>;
   onRemoveConsumption: (bookingId: string, consumptionId: string) => Promise<void>;
   onCheckOut: (roomId: string) => Promise<void>;
   onExtendStay: (bookingId: string, newCheckOut: string) => Promise<void>;
@@ -78,6 +87,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const [upfrontReceiverUid, setUpfrontReceiverUid] = useState<string>('');
   const [isSavingUpfront, setIsSavingUpfront] = useState(false);
 
+  const [consumptionPaymentType, setConsumptionPaymentType] = useState<'ROOM_TAB' | 'PAID_NOW'>('ROOM_TAB');
+  const [consumptionPaymentMethod, setConsumptionPaymentMethod] = useState<PaymentMethod>('PIX');
+  const [consumptionReceiverUid, setConsumptionReceiverUid] = useState<string>(() => currentUser?.uid || '');
+
   const bookingId = booking?.id;
   const isAirbnb = booking ? booking.source === 'AIRBNB' : false;
   const stayTotal = booking ? (isAirbnb ? (Number(booking.extraStayCharges) || 0) : (Number(booking.totalPrice) || 0)) : 0;
@@ -130,9 +143,23 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onAddConsumption(booking.id, product, quantity);
+      const isPaidImmediate = consumptionPaymentType === 'PAID_NOW';
+      const paidByUid = isPaidImmediate ? (consumptionReceiverUid || currentUser?.uid) : undefined;
+      const paidUser = paidByUid ? (users?.find(u => u.uid === paidByUid) || currentUser) : null;
+      const paidByInfo = paidUser ? {
+        uid: paidUser.uid || paidUser.id || 'system',
+        email: paidUser.email || null,
+        name: paidUser.name || paidUser.displayName || 'Colaborador'
+      } : null;
+
+      await onAddConsumption(booking.id, product, quantity, {
+        isPaidImmediate,
+        paymentMethod: isPaidImmediate ? consumptionPaymentMethod : undefined,
+        paidBy: paidByInfo
+      });
       setQuantity(1);
       setSelectedProductId('');
+      setConsumptionPaymentType('ROOM_TAB');
     } finally {
       setIsSubmitting(false);
     }
@@ -245,8 +272,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     }
   };
 
-  const totalConsumido = booking ? (booking.consumptions?.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
-  const grandTotal = totalConsumido + stayTotal;
+  const totalConsumidoPendente = booking ? (booking.consumptions?.filter(c => !c.isPaidImmediate).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
+  const totalConsumidoImediato = booking ? (booking.consumptions?.filter(c => c.isPaidImmediate).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
+  const grandTotal = totalConsumidoPendente + stayTotal;
   const upfrontAmt = booking?.upfrontPaid ? (Number(booking.upfrontPaymentAmount) || 0) : 0;
   const finalGrandTotal = Math.max(0, grandTotal - upfrontAmt);
 
@@ -326,16 +354,82 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       </button>
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex flex-col justify-end">
-                    <button 
-                      onClick={handleAdd}
-                      disabled={!selectedProductId || isSubmitting}
-                      className="h-[52px] bg-brand-gold text-brand-bg px-8 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-brand-gold/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100"
+                {/* Opções de Cobrança do Produto */}
+                <div className="bg-white/[0.02] p-4 rounded-3xl border border-white/5 space-y-3">
+                  <span className="text-[9px] uppercase text-slate-500 font-extrabold tracking-widest block">Condição de Pagamento</span>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConsumptionPaymentType('ROOM_TAB')}
+                      className={`py-3 px-3 rounded-xl border text-[10px] font-black uppercase tracking-wider text-center transition-all ${
+                        consumptionPaymentType === 'ROOM_TAB'
+                          ? 'bg-white/5 border-brand-gold/40 text-brand-gold font-bold'
+                          : 'bg-transparent border-white/5 text-slate-400 hover:bg-white/[0.02]'
+                      }`}
                     >
-                      {isSubmitting ? 'Lançando...' : 'Lançar'}
+                      Pendurar no Quarto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConsumptionPaymentType('PAID_NOW')}
+                      className={`py-3 px-3 rounded-xl border text-[10px] font-black uppercase tracking-wider text-center transition-all ${
+                        consumptionPaymentType === 'PAID_NOW'
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold'
+                          : 'bg-transparent border-white/5 text-slate-400 hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      Pago no Ato: R$ {selectedProductId ? ((products.find(p => p.id === selectedProductId)?.price || 0) * quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
                     </button>
                   </div>
+
+                  {consumptionPaymentType === 'PAID_NOW' && (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 transition-all">
+                      <div className="space-y-1">
+                        <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
+                        <select 
+                          value={consumptionPaymentMethod}
+                          onChange={(e) => setConsumptionPaymentMethod(e.target.value as PaymentMethod)}
+                          className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="DINHEIRO">Dinheiro</option>
+                          <option value="DEBITO">Débito</option>
+                          <option value="CREDITO">Crédito</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Operador)</label>
+                        <select 
+                          value={consumptionReceiverUid}
+                          onChange={(e) => setConsumptionReceiverUid(e.target.value)}
+                          className="w-full bg-brand-slate border border-white/10 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                        >
+                          {users && users.length > 0 ? (
+                            users.map((u) => (
+                              <option key={u.uid} value={u.uid}>
+                                {u.name || u.email?.split('@')[0]}
+                              </option>
+                            ))
+                          ) : (
+                            currentUser && <option value={currentUser.uid}>{currentUser.name || currentUser.email}</option>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    onClick={handleAdd}
+                    disabled={!selectedProductId || isSubmitting}
+                    className="w-full h-12 bg-brand-gold text-brand-bg rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-brand-gold/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100"
+                  >
+                    {isSubmitting ? 'Lançando...' : 'Confirmar e Lançar Item'}
+                  </button>
                 </div>
               </div>
 
@@ -663,12 +757,28 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                       <p className="text-[10px] text-slate-500 font-mono">
                         {item.quantity}x R$ {(item.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+                        {item.isPaidImmediate ? (
+                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded">
+                            Pago no Ato ({item.paymentMethod})
+                          </span>
+                        ) : (
+                          <span className="bg-amber-500/10 text-amber-400 border border-amber-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded">
+                            Na conta do quarto
+                          </span>
+                        )}
+                        {item.paidBy && (
+                          <span className="text-[8px] text-slate-500">
+                            p/ {item.paidBy.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-brand-gold font-mono">
                         R$ {((item.price || 0) * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
-                      <p className="text-[8px] text-slate-600 uppercase font-black">Lançado agora</p>
+                      <p className="text-[8px] text-slate-600 uppercase font-black">Lançado</p>
                     </div>
                     <button
                       onClick={() => onRemoveConsumption(booking.id, item.id)}
@@ -685,8 +795,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
               <div className="pt-6 border-t border-white/5 space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
-                    <span>Subtotal de Consumo</span>
-                    <span className="text-slate-300">R$ {totalConsumido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>Subtotal Consumo {totalConsumidoImediato > 0 && <span className="lowercase text-[8px] text-emerald-400/80">(-R$ {totalConsumidoImediato.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} pago no ato)</span>}</span>
+                    <span className="text-slate-300">R$ {totalConsumidoPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-500 font-black uppercase tracking-widest">
                     <span>Diárias Estadia {isAirbnb && repasseAirbnb > 0 && <span className="lowercase text-[8px] text-brand-gold/70">(Adicionais)</span>}</span>

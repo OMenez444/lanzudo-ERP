@@ -438,7 +438,7 @@ export default function App() {
     const roomId = selectedRoom.id;
     const activeBooking = selectedBooking;
     
-    const consumptionsTotal = activeBooking.consumptions?.reduce((acc, curr) => {
+    const consumptionsTotal = activeBooking.consumptions?.filter(c => !c.isPaidImmediate).reduce((acc, curr) => {
       const price = Number(curr.price) || 0;
       const qty = Number(curr.quantity) || 0;
       return acc + (price * qty);
@@ -558,9 +558,24 @@ export default function App() {
     }
   };
 
-  const handleAddConsumption = async (bookingId: string, product: Product, quantity: number) => {
+  const handleAddConsumption = async (
+    bookingId: string, 
+    product: Product, 
+    quantity: number,
+    paymentOptions?: {
+      isPaidImmediate: boolean;
+      paymentMethod?: PaymentMethod;
+      paidBy?: { uid: string; email: string | null; name: string | null; } | null;
+    }
+  ) => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
+
+    const operatorInfo = paymentOptions?.isPaidImmediate ? (paymentOptions.paidBy || {
+      uid: user?.uid || 'system',
+      email: user?.email || null,
+      name: user?.name || user?.email?.split('@')[0] || 'Sistema'
+    }) : null;
 
     const newConsumption: Consumption = {
       id: Math.random().toString(36).substr(2, 9),
@@ -568,7 +583,16 @@ export default function App() {
       productName: product.name,
       price: product.price,
       quantity,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      createdBy: {
+        uid: user?.uid || 'unknown',
+        email: user?.email || null,
+        name: user?.name || user?.email?.split('@')[0] || 'Colaborador'
+      },
+      isPaidImmediate: paymentOptions?.isPaidImmediate || false,
+      paymentMethod: paymentOptions?.isPaidImmediate ? (paymentOptions.paymentMethod || 'DINHEIRO') : undefined,
+      paidAt: paymentOptions?.isPaidImmediate ? new Date().toISOString() : undefined,
+      paidBy: operatorInfo
     };
 
     const updatedConsumptions = [...(booking.consumptions || []), newConsumption];
