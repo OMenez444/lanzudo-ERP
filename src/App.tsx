@@ -147,7 +147,7 @@ export default function App() {
         const userRef = doc(db, 'users', storedUserId);
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
-          const u = { id: docSnap.id, ...docSnap.data() } as AppUser;
+          const u = { id: docSnap.id, uid: docSnap.id, ...docSnap.data() } as AppUser;
           setUser(u);
           setCurrentUserProfile(u);
         } else {
@@ -402,7 +402,7 @@ export default function App() {
             previousStatus: 'CONFIRMED',
             newStatus: 'CHECKED_IN',
             updatedBy: user ? {
-              uid: user.uid,
+              uid: user.uid || user.id || 'unknown',
               email: user.email,
               name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
             } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
@@ -467,7 +467,7 @@ export default function App() {
         paymentMethod: method,
         checkedOutAt: serverTimestamp(),
         checkedOutBy: user ? {
-          uid: user.uid,
+          uid: user.uid || user.id || 'unknown',
           email: user.email,
           name: user.name || user.email?.split('@')[0] || 'Desconhecido'
         } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' }
@@ -481,7 +481,7 @@ export default function App() {
         previousStatus: activeBooking.status || 'CONFIRMED',
         newStatus: 'CHECKED_OUT',
         updatedBy: user ? {
-          uid: user.uid,
+          uid: user.uid || user.id || 'unknown',
           email: user.email,
           name: user.name || user.email?.split('@')[0] || 'Desconhecido'
         } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
@@ -585,15 +585,20 @@ export default function App() {
       quantity,
       timestamp: new Date().toISOString(),
       createdBy: {
-        uid: user?.uid || 'unknown',
+        uid: user?.uid || user?.id || 'unknown',
         email: user?.email || null,
         name: user?.name || user?.email?.split('@')[0] || 'Colaborador'
       },
-      isPaidImmediate: paymentOptions?.isPaidImmediate || false,
-      paymentMethod: paymentOptions?.isPaidImmediate ? (paymentOptions.paymentMethod || 'DINHEIRO') : undefined,
-      paidAt: paymentOptions?.isPaidImmediate ? new Date().toISOString() : undefined,
-      paidBy: operatorInfo
+      isPaidImmediate: paymentOptions?.isPaidImmediate || false
     };
+
+    if (paymentOptions?.isPaidImmediate) {
+      newConsumption.paymentMethod = paymentOptions.paymentMethod || 'DINHEIRO';
+      newConsumption.paidAt = new Date().toISOString();
+      if (operatorInfo) {
+        newConsumption.paidBy = operatorInfo;
+      }
+    }
 
     const updatedConsumptions = [...(booking.consumptions || []), newConsumption];
 
@@ -731,7 +736,7 @@ export default function App() {
         previousStatus: booking.status || 'CONFIRMED',
         newStatus: 'CANCELLED',
         updatedBy: user ? {
-          uid: user.uid,
+          uid: user.uid || user.id || 'unknown',
           email: user.email,
           name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
         } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
@@ -996,7 +1001,7 @@ export default function App() {
         source: data.source,
         createdAt: serverTimestamp(),
         createdBy: user ? {
-          uid: user.uid,
+          uid: user.uid || user.id || 'unknown',
           email: user.email,
           name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
         } : undefined
@@ -1010,7 +1015,7 @@ export default function App() {
         previousStatus: 'NONE',
         newStatus: 'CONFIRMED',
         updatedBy: user ? {
-          uid: user.uid,
+          uid: user.uid || user.id || 'unknown',
           email: user.email,
           name: user.displayName || user.email?.split('@')[0] || 'Desconhecido'
         } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' },
@@ -1131,7 +1136,7 @@ export default function App() {
         }
         
         const userDoc = querySnapshot.docs[0];
-        const userData = userDoc.data() as AppUser & { password?: string };
+        const userData = { id: userDoc.id, uid: userDoc.id, ...userDoc.data() } as AppUser & { password?: string };
         
         if (userData.password !== password) {
           throw new Error('Senha incorreta.');

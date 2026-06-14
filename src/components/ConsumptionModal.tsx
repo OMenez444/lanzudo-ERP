@@ -161,6 +161,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       setQuantity(1);
       setSelectedProductId('');
       setConsumptionPaymentType('ROOM_TAB');
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao lançar consumo: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,6 +174,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     try {
       await onCheckOut(booking.roomId);
       onClose();
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao iniciar finalização/check-out: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsCheckingOut(false);
     }
@@ -182,6 +188,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     try {
       await onExtendStay(booking.id, newCheckOutDate);
       setNewCheckOutDate('');
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao estender estadia: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsExtending(false);
     }
@@ -195,6 +204,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
         stayTotal: editStayTotal
       });
       setIsEditingDetails(false);
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao atualizar detalhes da reserva: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsUpdatingDetails(false);
     }
@@ -205,6 +217,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       setIsCancelling(true);
       try {
         await onCancelBooking(booking.id);
+      } catch (error) {
+        console.error(error);
+        alert("Erro ao cancelar reserva: " + (error instanceof Error ? error.message : String(error)));
       } finally {
         setIsCancelling(false);
       }
