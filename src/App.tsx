@@ -29,7 +29,7 @@ import { AddGuestModal } from './components/AddGuestModal';
 import { PaymentModal } from './components/PaymentModal';
 import { LanChatbot } from './components/LanChatbot';
 import { CashierClosingView } from './components/CashierClosingView';
-import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod, AppUser, BookingStatusLog } from './types';
+import { Room, Stat, Product, Booking, Consumption, Guest, PaymentMethod, AppUser, BookingStatusLog, UpfrontPayment } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   collection, 
@@ -672,6 +672,7 @@ export default function App() {
     upfrontPaymentMethod?: PaymentMethod;
     upfrontPaidAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     upfrontPaidBy?: { uid: string; email: string | null; name: string | null; } | null;
+    upfrontPaymentsList?: UpfrontPayment[];
   }) => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
@@ -708,6 +709,9 @@ export default function App() {
       }
       if (updates.upfrontPaidBy !== undefined) {
         dataToUpdate.upfrontPaidBy = updates.upfrontPaidBy;
+      }
+      if (updates.upfrontPaymentsList !== undefined) {
+        dataToUpdate.upfrontPaymentsList = updates.upfrontPaymentsList;
       }
 
       await updateDoc(doc(db, 'bookings', bookingId), dataToUpdate);

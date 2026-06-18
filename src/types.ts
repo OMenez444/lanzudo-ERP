@@ -64,6 +64,18 @@ export interface Consumption {
 
 export type PaymentMethod = 'DINHEIRO' | 'PIX' | 'DEBITO' | 'CREDITO';
 
+export interface UpfrontPayment {
+  id: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  paidAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  paidBy: {
+    uid: string;
+    email: string | null;
+    name: string | null;
+  };
+}
+
 export interface Booking {
   id: string;
   guestId?: string;
@@ -100,6 +112,7 @@ export interface Booking {
     email: string | null;
     name: string | null;
   };
+  upfrontPaymentsList?: UpfrontPayment[];
 }
 
 export interface AppUser {

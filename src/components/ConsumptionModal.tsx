@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -6,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Booking, Product, BookingStatusLog, Room, PaymentMethod, AppUser } from '../types';
+import { Booking, Product, BookingStatusLog, Room, PaymentMethod, AppUser, UpfrontPayment } from '../types';
 import { formatDisplayDate } from '../lib/dateUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Minus, ShoppingBag, CreditCard, History, User, Trash2, Edit3, Check, DollarSign } from 'lucide-react';
@@ -37,6 +38,7 @@ interface ConsumptionModalProps {
     upfrontPaymentMethod?: PaymentMethod;
     upfrontPaidAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     upfrontPaidBy?: { uid: string; email: string | null; name: string | null; } | null;
+    upfrontPaymentsList?: UpfrontPayment[];
   }) => Promise<void>;
   onCancelBooking: (bookingId: string) => Promise<void>;
   rooms: Room[];
@@ -126,15 +128,20 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   useEffect(() => {
     if (booking) {
-      const targetAmount = booking.upfrontPaymentAmount !== undefined ? booking.upfrontPaymentAmount.toString() : stayTotal.toString();
-      const targetMethod = booking.upfrontPaymentMethod || 'PIX';
-      setUpfrontAmount((prev) => (prev !== targetAmount ? targetAmount : prev)); // eslint-disable-line
-      setUpfrontMethod((prev) => (prev !== targetMethod ? targetMethod : prev));
+      const list = booking.upfrontPaymentsList && booking.upfrontPaymentsList.length > 0
+        ? booking.upfrontPaymentsList
+        : (booking.upfrontPaid && (booking.upfrontPaymentAmount || 0) > 0 ? [{ id: 'legacy', amount: Number(booking.upfrontPaymentAmount) || 0 }] : []);
+      const totalPaid = list.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+      const remaining = Math.max(0, stayTotal - totalPaid);
+
+      const targetAmount = remaining > 0 ? remaining.toFixed(2) : '';
+      setUpfrontAmount((prev) => (prev !== targetAmount ? targetAmount : prev));
+      setUpfrontMethod((prev) => (prev !== 'PIX' ? 'PIX' : prev));
       
-      const targetReceiverUid = booking.upfrontPaidBy?.uid || booking.upfrontPaidBy?.id || currentUser?.uid || currentUser?.id || '';
+      const targetReceiverUid = currentUser?.uid || currentUser?.id || '';
       setUpfrontReceiverUid((prev) => (prev !== targetReceiverUid ? targetReceiverUid : prev));
     }
-  }, [bookingId, stayTotal, booking, currentUser]);
+  }, [bookingId, stayTotal, currentUser, booking]);
 
   if (!isOpen || !booking) return null;
 
@@ -237,11 +244,32 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     }
   };
 
+  const getUpfrontPayments = (): UpfrontPayment[] => {
+    if (!booking) return [];
+    if (booking.upfrontPaymentsList && booking.upfrontPaymentsList.length > 0) {
+      return booking.upfrontPaymentsList;
+    }
+    if (booking.upfrontPaid && (booking.upfrontPaymentAmount || 0) > 0) {
+      return [{
+        id: 'legacy',
+        amount: Number(booking.upfrontPaymentAmount) || 0,
+        paymentMethod: booking.upfrontPaymentMethod || 'PIX',
+        paidAt: booking.upfrontPaidAt || new Date().toISOString(),
+        paidBy: booking.upfrontPaidBy || { uid: 'system', email: 'system@hotel.com', name: 'Sistema' }
+      }];
+    }
+    return [];
+  };
+
   const handleSaveUpfront = async () => {
     if (!booking) return;
     setIsSavingUpfront(true);
     try {
       const amount = parseFloat(upfrontAmount) || 0;
+      if (amount <= 0) {
+        alert("Por favor, insira um valor acima de zero.");
+        return;
+      }
       
       const selectedUser = users?.find(u => u.uid === upfrontReceiverUid || u.id === upfrontReceiverUid);
       const receiverInfo = selectedUser ? {
@@ -254,13 +282,40 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
         name: currentUser.name || currentUser.email?.split('@')[0] || 'Desconhecido'
       } : { uid: 'system', email: 'system@hotel.com', name: 'Sistema' });
 
+      const newPayment: UpfrontPayment = {
+        id: Math.random().toString(36).substr(2, 9),
+        amount,
+        paymentMethod: upfrontMethod,
+        paidAt: new Date().toISOString(),
+        paidBy: receiverInfo
+      };
+
+      const existingList = booking.upfrontPaymentsList || [];
+      const currentList = [...existingList];
+      
+      if (currentList.length === 0 && booking.upfrontPaid && (booking.upfrontPaymentAmount || 0) > 0) {
+        currentList.push({
+          id: 'legacy',
+          amount: Number(booking.upfrontPaymentAmount) || 0,
+          paymentMethod: booking.upfrontPaymentMethod || 'PIX',
+          paidAt: booking.upfrontPaidAt || new Date().toISOString(),
+          paidBy: booking.upfrontPaidBy || receiverInfo
+        });
+      }
+      
+      currentList.push(newPayment);
+      const totalAmt = currentList.reduce((acc, curr) => acc + curr.amount, 0);
+
       await onUpdateBooking(booking.id, {
         upfrontPaid: true,
-        upfrontPaymentAmount: amount,
+        upfrontPaymentAmount: totalAmt,
         upfrontPaymentMethod: upfrontMethod,
         upfrontPaidAt: new Date().toISOString(),
-        upfrontPaidBy: receiverInfo
+        upfrontPaidBy: receiverInfo,
+        upfrontPaymentsList: currentList
       });
+
+      setUpfrontAmount('');
     } catch (error) {
       console.error("Erro ao salvar pagamento antecipado:", error);
     } finally {
@@ -268,20 +323,37 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     }
   };
 
-  const handleResetUpfront = async () => {
+  const handleRemoveUpfront = async (payId: string) => {
     if (!booking) return;
-    if (window.confirm("Certeza que deseja estornar/cancelar este pagamento antecipado?")) {
+    if (window.confirm("Certeza que deseja estornar/cancelar este recebimento antecipado?")) {
       setIsSavingUpfront(true);
       try {
-        await onUpdateBooking(booking.id, {
-          upfrontPaid: false,
-          upfrontPaymentAmount: 0,
-          upfrontPaymentMethod: 'PIX',
-          upfrontPaidAt: null,
-          upfrontPaidBy: null
-        });
+        const existingList = getUpfrontPayments();
+        const currentList = existingList.filter(p => p.id !== payId);
+        
+        if (currentList.length === 0) {
+          await onUpdateBooking(booking.id, {
+            upfrontPaid: false,
+            upfrontPaymentAmount: 0,
+            upfrontPaymentMethod: 'PIX',
+            upfrontPaidAt: null,
+            upfrontPaidBy: null,
+            upfrontPaymentsList: []
+          });
+        } else {
+          const totalAmt = currentList.reduce((acc, curr) => acc + curr.amount, 0);
+          const latest = currentList[currentList.length - 1];
+          await onUpdateBooking(booking.id, {
+            upfrontPaid: true,
+            upfrontPaymentAmount: totalAmt,
+            upfrontPaymentMethod: latest.paymentMethod,
+            upfrontPaidAt: latest.paidAt,
+            upfrontPaidBy: latest.paidBy,
+            upfrontPaymentsList: currentList
+          });
+        }
       } catch (error) {
-        console.error("Erro ao estornar pagamento antecipado:", error);
+        console.error("Erro ao estornar recebimento:", error);
       } finally {
         setIsSavingUpfront(false);
       }
@@ -291,7 +363,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const totalConsumidoPendente = booking ? (booking.consumptions?.filter(c => !c.isPaidImmediate).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
   const totalConsumidoImediato = booking ? (booking.consumptions?.filter(c => c.isPaidImmediate).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0) || 0) : 0;
   const grandTotal = totalConsumidoPendente + stayTotal;
-  const upfrontAmt = booking?.upfrontPaid ? (Number(booking.upfrontPaymentAmount) || 0) : 0;
+  const upfrontPayments = getUpfrontPayments();
+  const upfrontAmt = upfrontPayments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
   const finalGrandTotal = Math.max(0, grandTotal - upfrontAmt);
 
   return (
@@ -616,104 +689,115 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase text-brand-gold tracking-widest flex items-center gap-1.5">
                         <DollarSign size={12} />
-                        Pagamento Antecipado (No Início)
+                        Pagamentos Antecipados
                       </span>
-                      {booking.upfrontPaid ? (
+                      {upfrontAmt > 0 ? (
                         <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full">
-                          Pago
+                          Pago R$ {upfrontAmt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       ) : (
                         <span className="bg-slate-500/10 text-slate-400 border border-slate-500/10 text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full">
-                          Não Registrado
+                          Nenhum Registrado
                         </span>
                       )}
                     </div>
 
-                    {!booking.upfrontPaid ? (
-                      <div className="space-y-3 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Valor Recebido (R$)</label>
-                            <input 
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder={stayTotal.toFixed(2)}
-                              value={upfrontAmount}
-                              onChange={(e) => setUpfrontAmount(e.target.value)}
-                              className="w-full bg-white/5 border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-brand-gold/70"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
-                            <select 
-                              value={upfrontMethod}
-                              onChange={(e) => setUpfrontMethod(e.target.value as PaymentMethod)}
-                              className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
-                            >
-                              <option value="DINHEIRO">Dinheiro</option>
-                              <option value="PIX">PIX</option>
-                              <option value="DEBITO">Débito</option>
-                              <option value="CREDITO">Crédito</option>
-                            </select>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-1">
-                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Colaborador)</label>
-                          <select 
-                            value={upfrontReceiverUid}
-                            onChange={(e) => setUpfrontReceiverUid(e.target.value)}
-                            className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                    {/* List of registered payments */}
+                    {upfrontPayments.length > 0 && (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {upfrontPayments.map((p, idx) => (
+                          <div 
+                            key={p.id || idx} 
+                            className="bg-emerald-500/[0.02] p-2.5 rounded-xl border border-emerald-500/10 text-[11px] text-brand-cream flex items-center justify-between gap-2"
                           >
-                            {users && users.length > 0 ? (
-                              users.filter(u => u.status === 'ACTIVE').map(u => (
-                                <option key={u.uid || u.id} value={u.uid || u.id} className="bg-brand-slate text-white">
-                                  {u.name || u.email?.split('@')[0]}
-                                </option>
-                              ))
-                            ) : (
-                              <option value={currentUser?.uid || currentUser?.id || ''} className="bg-brand-slate text-white">
-                                {currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário Atual'}
-                              </option>
-                            )}
-                          </select>
-                        </div>
-                        <button 
-                          onClick={handleSaveUpfront}
-                          disabled={isSavingUpfront}
-                          className="w-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 border border-emerald-500/10 transition-colors rounded-xl py-2 text-[9px] uppercase font-black tracking-wider flex items-center justify-center gap-1"
-                        >
-                          {isSavingUpfront ? 'Salvando...' : 'Confirmar Recebimento'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="bg-emerald-500/[0.02] p-3.5 rounded-2xl border border-emerald-500/10 text-xs text-brand-cream space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Valor Pago Antecipado:</span>
-                          <span className="font-bold text-emerald-450 font-mono">
-                            R$ {Number(booking.upfrontPaymentAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Forma de Pagamento:</span>
-                          <span className="font-bold text-brand-gold text-xs">{booking.upfrontPaymentMethod || 'PIX'}</span>
-                        </div>
-                        {booking.upfrontPaidBy && (
-                          <div className="flex justify-between text-[10px] text-slate-500">
-                            <span>Processado por:</span>
-                            <span>{booking.upfrontPaidBy.name}</span>
+                            <div className="space-y-0.5 flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-emerald-450 font-mono">
+                                  R$ {p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-[9px] bg-brand-slate text-brand-gold font-bold px-1 rounded">
+                                  {p.paymentMethod || 'PIX'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-[9px] text-slate-500">
+                                <span>Por: {p.paidBy?.name || 'Sistema'}</span>
+                                <span>{p.paidAt ? new Date(p.paidAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => handleRemoveUpfront(p.id)}
+                              disabled={isSavingUpfront}
+                              title="Estornar este pagamento"
+                              className="text-slate-500 hover:text-red-450 p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
-                        )}
-                        <button 
-                          onClick={handleResetUpfront}
-                          disabled={isSavingUpfront}
-                          className="w-full text-slate-500 hover:text-red-450 text-[8px] uppercase tracking-widest font-black pt-2 transition-colors border-t border-white/5 block text-center"
-                        >
-                          Cancelar Pagamento Antecipado
-                        </button>
+                        ))}
                       </div>
                     )}
+
+                    {/* New/Additional Upfront Payment Form */}
+                    <div className="space-y-3 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                      <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                        {upfrontPayments.length > 0 ? 'Registrar Recebimento Adicional' : 'Registrar Novo Recebimento'}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Valor Recebido (R$)</label>
+                          <input 
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder={(Math.max(0, stayTotal - upfrontAmt)).toFixed(2)}
+                            value={upfrontAmount}
+                            onChange={(e) => setUpfrontAmount(e.target.value)}
+                            className="w-full bg-white/5 border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-brand-gold/70"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Forma de Pgto</label>
+                          <select 
+                            value={upfrontMethod}
+                            onChange={(e) => setUpfrontMethod(e.target.value as PaymentMethod)}
+                            className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                          >
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="PIX">PIX</option>
+                            <option value="DEBITO">Débito</option>
+                            <option value="CREDITO">Crédito</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[8px] uppercase text-slate-500 font-extrabold tracking-wider block">Recebido por (Colaborador)</label>
+                        <select 
+                          value={upfrontReceiverUid}
+                          onChange={(e) => setUpfrontReceiverUid(e.target.value)}
+                          className="w-full bg-brand-slate border border-white/5 rounded-xl py-1.5 px-3 text-xs text-white focus:outline-none focus:border-brand-gold/70"
+                        >
+                          {users && users.length > 0 ? (
+                            users.filter(u => u.status === 'ACTIVE').map(u => (
+                              <option key={u.uid || u.id} value={u.uid || u.id} className="bg-brand-slate text-white">
+                                {u.name || u.email?.split('@')[0]}
+                              </option>
+                            ))
+                          ) : (
+                            <option value={currentUser?.uid || currentUser?.id || ''} className="bg-brand-slate text-white">
+                              {currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário Atual'}
+                            </option>
+                          )}
+                        </select>
+                      </div>
+                      <button 
+                        onClick={handleSaveUpfront}
+                        disabled={isSavingUpfront}
+                        className="w-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 border border-emerald-500/10 transition-colors rounded-xl py-2 text-[9px] uppercase font-black tracking-wider flex items-center justify-center gap-1"
+                      >
+                        {isSavingUpfront ? 'Salvando...' : 'Confirmar Recebimento'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

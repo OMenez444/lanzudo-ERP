@@ -150,8 +150,32 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
       }
     }
 
-    // 2. Check if upfront payment is during this shift & operator
-    if (b.upfrontPaid && b.upfrontPaidAt) {
+    // 2. Check if upfront payments are during this shift & operator
+    if (b.upfrontPaymentsList && b.upfrontPaymentsList.length > 0) {
+      b.upfrontPaymentsList.forEach((upPay, idx) => {
+        const upfrontDate = upPay.paidAt?.toDate ? upPay.paidAt.toDate() : new Date(upPay.paidAt);
+        if (upfrontDate >= shiftStart && upfrontDate < shiftEnd) {
+          const upfrontOperatorUid = upPay.paidBy?.uid || upPay.paidBy?.id;
+          if (upfrontOperatorUid === currentUid) {
+            dailyTransactions.push({
+              id: `upfront_${b.id}_${upPay.id || idx}`,
+              type: 'UPFRONT',
+              booking: b,
+              guestName: b.guestName || 'Hóspede',
+              roomId: b.roomId || '',
+              amount: upPay.amount || 0,
+              paymentMethod: upPay.paymentMethod || 'PIX',
+              operatorName: upPay.paidBy?.name || 'Sistema',
+              time: upfrontDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              timestamp: upPay.paidAt,
+              details: 'Pagamento Antecipado (Início)',
+              consumptionsTotal: 0,
+              discount: 0
+            });
+          }
+        }
+      });
+    } else if (b.upfrontPaid && b.upfrontPaidAt) {
       const upfrontDate = b.upfrontPaidAt.toDate ? b.upfrontPaidAt.toDate() : new Date(b.upfrontPaidAt);
       if (upfrontDate >= shiftStart && upfrontDate < shiftEnd) {
         const upfrontOperatorUid = b.upfrontPaidBy?.uid || b.upfrontPaidBy?.id;
