@@ -14,7 +14,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Booking, CashierClosing, PaymentMethod, Consumption } from '../types';
 
@@ -282,6 +282,69 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
 
   // Check if a closing is already officialised for this date and shift
   const currentClosingRecord = closingsHistory.find((c) => c.date === selectedDate && c.shift === selectedShift);
+
+  const handleDeleteTransaction = async (tx: typeof dailyTransactions[0]) => {
+    if (!window.confirm(`Deseja realmente estornar/excluir este recebimento de R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) {
+      return;
+    }
+    
+    try {
+      const b = tx.booking;
+      if (tx.type === 'UPFRONT') {
+        const upPayId = tx.id.replace(`upfront_${b.id}_`, '');
+        const list = b.upfrontPaymentsList || [];
+        const currentList = list.filter(p => p.id !== upPayId && `upfront_${b.id}_${p.id}` !== tx.id && p.id !== 'legacy');
+        
+        const wasLegacy = tx.id === `upfront_${b.id}` || upPayId === 'legacy';
+        
+        let updates: Partial<Booking> = {};
+        if (currentList.length === 0 && (wasLegacy || list.length <= 1)) {
+          updates = {
+            upfrontPaid: false,
+            upfrontPaymentAmount: 0,
+            upfrontPaymentMethod: 'PIX',
+            upfrontPaidAt: null,
+            upfrontPaidBy: null,
+            upfrontPaymentsList: []
+          };
+        } else {
+          const filtered = list.filter(p => p.id !== upPayId && `upfront_${b.id}_${p.id}` !== tx.id);
+          const totalAmt = filtered.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+          const latest = filtered[filtered.length - 1];
+          updates = {
+            upfrontPaid: true,
+            upfrontPaymentAmount: totalAmt,
+            upfrontPaymentMethod: latest?.paymentMethod || 'PIX',
+            upfrontPaidAt: latest?.paidAt || null,
+            upfrontPaidBy: latest?.paidBy || null,
+            upfrontPaymentsList: filtered
+          };
+        }
+        
+        await updateDoc(doc(db, 'bookings', b.id), updates);
+        alert("Recebimento estornado com sucesso!");
+      } else if (tx.type === 'CONSUMPTION_SALE') {
+        const cId = tx.id.replace(`consumption_${b.id}_`, '');
+        const updatedConsumptions = b.consumptions?.filter(c => c.id !== cId) || [];
+        await updateDoc(doc(db, 'bookings', b.id), { consumptions: updatedConsumptions });
+        alert("Venda de consumo estornada com sucesso!");
+      } else if (tx.type === 'CHECKOUT') {
+        await updateDoc(doc(db, 'bookings', b.id), {
+          status: 'CONFIRMED',
+          checkedOutAt: null,
+          checkedOutBy: null,
+          paymentMethod: null,
+          paymentAmount: null,
+          paymentPaidAt: null,
+          paymentPaidBy: null,
+        });
+        alert("Checkout estornado com sucesso! O quarto voltou para o status de Ocupado.");
+      }
+    } catch (e) {
+      console.error("Erro ao estornar transação:", e);
+      alert("Erro ao estornar transação.");
+    }
+  };
 
   const handleSaveClosing = async () => {
     if (!currentUser) return;
@@ -730,6 +793,7 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                       <th className="pb-4 font-black">Operador</th>
                       <th className="pb-4 font-black">Método / Tipo</th>
                       <th className="pb-4 text-right font-black">Valores</th>
+                      <th className="pb-4 text-right font-black w-12">Opções</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -774,6 +838,16 @@ export const CashierClosingView: React.FC<CashierClosingViewProps> = ({
                             {tx.discount !== undefined && tx.discount > 0 && (
                               <span className="text-[8px] text-red-400 block">-R$ {tx.discount} desc.</span>
                             )}
+                          </td>
+                          <td className="py-4 text-right pl-2">
+                            <button
+                              onClick={() => handleDeleteTransaction(tx)}
+                              aria-label="Excluir Transação"
+                              title="Estornar/Excluir esta transação de caixa"
+                              className="text-slate-500 hover:text-red-450 p-2 hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </td>
                         </tr>
                       );
