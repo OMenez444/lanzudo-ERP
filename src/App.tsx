@@ -19,6 +19,7 @@ import {
 import { Sidebar } from './components/Sidebar';
 import { RoomCard } from './components/RoomCard';
 import { DashboardStats } from './components/DashboardStats';
+import { OccupancyDetailModal } from './components/OccupancyDetailModal';
 import { TimelineView } from './components/TimelineView';
 import { BookingModal } from './components/BookingModal';
 import { EditRoomModal } from './components/EditRoomModal';
@@ -64,6 +65,7 @@ export default function App() {
   const [isConsumptionModalOpen, setIsConsumptionModalOpen] = useState(false);
   const [isAddGuestModalOpen, setIsAddGuestModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isOccupancyModalOpen, setIsOccupancyModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -1390,7 +1392,7 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <DashboardStats stats={stats} />
+            <DashboardStats stats={stats} onStatClick={(label) => { if (label === 'Ocupação') setIsOccupancyModalOpen(true); }} />
             
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-serif text-brand-cream">Status da Operação</h3>
@@ -2234,6 +2236,13 @@ export default function App() {
           isOpen={isAddGuestModalOpen}
           onClose={() => setIsAddGuestModalOpen(false)}
           onSave={handleAddGuest}
+        />
+
+        <OccupancyDetailModal
+          isOpen={isOccupancyModalOpen}
+          onClose={() => setIsOccupancyModalOpen(false)}
+          rooms={rooms}
+          bookings={bookings}
         />
 
         <PaymentModal
