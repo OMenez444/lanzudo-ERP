@@ -33,19 +33,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userE
   ];
 
   return (
-    <aside className="w-72 bg-gradient-to-b from-[#00511f] to-[#003814] border-r border-[#fccf14]/20 p-8 hidden lg:flex flex-col h-full overflow-y-auto relative shadow-2xl shadow-emerald-950/40">
+    <aside className="w-72 bg-gradient-to-b from-[#161a24] to-[#0f1118] border-r border-[#b89047]/20 p-8 hidden lg:flex flex-col h-full overflow-y-auto relative shadow-2xl shadow-slate-950/40">
       {/* Small design stripes */}
-      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#009b3a] via-[#fccf14] to-[#0036a3]" />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#b89047] via-[#dfc493] to-[#b89047]" />
       
       <div className="mb-12 relative flex flex-col pt-4">
-        <div className="absolute top-[-10px] left-0 text-[9px] bg-[#fccf14]/15 text-[#fccf14] border border-[#fccf14]/30 px-2.5 py-0.5 rounded-full font-sans tracking-widest font-black uppercase flex items-center gap-1">
-          <span>🇧🇷 BRASIL NA COPA ⚽</span>
+        <div className="absolute top-[-10px] left-0 text-[9px] bg-[#b89047]/15 text-[#b89047] border border-[#b89047]/30 px-2.5 py-0.5 rounded-full font-sans tracking-widest font-black uppercase flex items-center gap-1">
+          <span>⚜️ ELEGANCE & LUXURY ⚜️</span>
         </div>
-        <h1 className="text-3xl font-serif text-[#fccf14] italic font-bold tracking-wider drop-shadow-md">
-          LANZUDO'S <span className="text-xl not-italic text-white">🇧🇷 HEXA</span>
+        <h1 className="text-3xl font-serif text-[#b89047] italic font-bold tracking-wider drop-shadow-md">
+          LANZUDO'S <span className="text-xl not-italic text-white">HOTEL</span>
         </h1>
-        <p className="text-[9px] tracking-[0.4em] text-[#fccf14] uppercase font-black mt-1 flex items-center gap-1 drop-shadow-sm">
-          PMS DA SELEÇÃO 🏆🌟
+        <p className="text-[9px] tracking-[0.3em] text-[#b89047]/80 uppercase font-black mt-1 flex items-center gap-1 drop-shadow-sm">
+          PMS & RESERVAS
         </p>
       </div>
       
@@ -56,11 +56,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userE
             onClick={() => setActiveTab(item.id)}
             className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl cursor-pointer transition-all duration-300 ${
               activeTab === item.id 
-                ? 'bg-[#fccf14] text-[#003814] shadow-xl shadow-[#fccf14]/10 font-black scale-[1.02]' 
+                ? 'bg-[#b89047] text-white shadow-xl shadow-[#b89047]/10 font-black scale-[1.02]' 
                 : 'text-white/70 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <span className={activeTab === item.id ? 'text-[#003814]' : 'text-[#fccf14]'}>
+            <span className={activeTab === item.id ? 'text-white' : 'text-[#b89047]'}>
               {item.icon}
             </span>
             <span className="text-sm tracking-tight uppercase">{item.label}</span>
@@ -70,15 +70,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userE
  
       <div className="border-t border-white/10 pt-6 mt-6 space-y-4">
         <button className="w-full flex items-center gap-4 px-6 py-3 text-white/50 hover:text-white transition-colors">
-          <Settings size={18} className="text-[#fccf14]" />
+          <Settings size={18} className="text-[#b89047]" />
           <span className="text-sm">Configurações</span>
         </button>
         <button onClick={onLogout} className="w-full flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-white/10 rounded-xl group transition-all text-left">
-          <div className="flex items-center gap-3 text-white/60 group-hover:text-[#fccf14] transition-colors">
-            <LogOut size={18} className="text-[#fccf14]" /> 
+          <div className="flex items-center gap-3 text-white/60 group-hover:text-[#b89047] transition-colors">
+            <LogOut size={18} className="text-[#b89047]" /> 
             <span className="text-sm font-bold">Troca de Turno</span>
           </div>
-          <span className="text-[9px] uppercase tracking-widest text-[#fccf14]/50 group-hover:text-white">Encerrar</span>
+          <span className="text-[9px] uppercase tracking-widest text-[#b89047]/50 group-hover:text-white">Encerrar</span>
         </button>
       </div>
     </aside>

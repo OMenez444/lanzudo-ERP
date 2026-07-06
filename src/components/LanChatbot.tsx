@@ -20,7 +20,7 @@ export const LanChatbot: React.FC = () => {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Olá! Sou a **Lan**, sua assistente inteligente. Vestindo a camisa da nossa Seleção! 🇧🇷⚽ Como posso ajudar você a operar o sistema e gerenciar o hotel hoje? 🏆✨'
+      text: 'Olá! Sou a **Lan**, sua assistente inteligente. Como posso ajudar você a operar o sistema e gerenciar o hotel hoje? ⚜️✨'
     }
   ]);
   const [inputValue, setInputValue] = useState('');

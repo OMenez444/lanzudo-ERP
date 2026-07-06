@@ -1214,7 +1214,7 @@ export default function App() {
         >
           <div className="w-16 h-16 border-4 border-brand-gold/20 border-t-brand-gold rounded-full animate-spin mb-6 mx-auto"></div>
           <h1 className="text-3xl font-serif text-brand-gold italic font-bold tracking-tighter uppercase">Lanzudo's</h1>
-          <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black">Hotel Experience • 🇧🇷 ⚽</p>
+          <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black">Hotel Experience & Reservas</p>
         </motion.div>
       </div>
     );
@@ -1229,11 +1229,11 @@ export default function App() {
           className="w-full max-w-md p-12 bg-brand-slate border border-white/5 rounded-[40px] text-center shadow-2xl relative"
         >
           <div className="mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-green/20 text-brand-gold border border-brand-green/35 rounded-full text-[10px] tracking-wider uppercase font-black mb-4 select-none">
-              <span>🇧🇷 COPA DO MUNDO • HES ⚽</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gold/10 text-brand-gold border border-brand-gold/25 rounded-full text-[10px] tracking-wider uppercase font-black mb-4 select-none">
+              <span>⚜️ LUXURY HOTEL PMS ⚜️</span>
             </div>
             <h1 className="text-4xl font-serif text-brand-gold italic font-bold tracking-tighter uppercase mb-2">Lanzudo's</h1>
-            <p className="text-[10px] tracking-[0.4em] text-brand-cream uppercase font-black opacity-60">Hotel Experience PMS • Seleção 🏆</p>
+            <p className="text-[10px] tracking-[0.3em] text-brand-cream uppercase font-black opacity-60">Hotel Experience PMS & Reservas</p>
           </div>
           
           <div className="space-y-6">
@@ -1342,8 +1342,8 @@ export default function App() {
             </h2>
             <p className="text-slate-500 italic flex flex-wrap items-center gap-2">
               <span>"Excelência em cada detalhe da hospitalidade."</span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-brand-green/20 text-brand-gold border border-brand-green/30 select-none uppercase">
-                <span>Seleção Hexa 🇧🇷 ⚽</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-brand-gold/10 text-brand-gold border border-brand-gold/20 select-none uppercase">
+                <span>Luxury Service ⚜️</span>
               </span>
             </p>
           </div>
