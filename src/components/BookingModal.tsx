@@ -231,15 +231,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <div className="grid grid-cols-4 gap-2 mt-2">
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 1 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">1 Pessoa</p>
-                        <p className="text-xs font-mono">139,00</p>
+                        <p className="text-xs font-mono">150,00</p>
                       </div>
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 2 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">2 Pessoas</p>
-                        <p className="text-xs font-mono">199,99</p>
+                        <p className="text-xs font-mono">210,00</p>
                       </div>
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount === 3 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">3 Pessoas</p>
-                        <p className="text-xs font-mono">279,00</p>
+                        <p className="text-xs font-mono">290,00</p>
                       </div>
                       <div className={`p-2 rounded-xl text-center border ${formData.guestsCount >= 4 ? 'bg-brand-gold text-brand-bg border-brand-gold' : 'bg-white/5 text-slate-500 border-white/5'}`}>
                         <p className="text-[8px] font-black uppercase">4 Pessoas</p>

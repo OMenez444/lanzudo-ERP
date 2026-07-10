@@ -172,7 +172,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 
           <div className="flex justify-between px-2">
             <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Tarifa</span>
-            <span className="text-brand-gold font-mono italic text-sm">R$ 139,00</span>
+            <span className="text-brand-gold font-mono italic text-sm">R$ 150,00</span>
           </div>
         </div>
       </div>
