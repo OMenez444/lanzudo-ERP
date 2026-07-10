@@ -58,11 +58,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     ? Math.max(0, Math.round((new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
   
-  // Pricing rules: 1=139, 2=199.99, 3=279
-  let pricePerNight = 139;
-  if (formData.guestsCount === 2) pricePerNight = 199.99;
-  if (formData.guestsCount === 3) pricePerNight = 279;
-  if (formData.guestsCount >= 4) pricePerNight = 279; // fallback
+  // Pricing rules: 1=150, 2=210, 3=290
+  let pricePerNight = 150;
+  if (formData.guestsCount === 2) pricePerNight = 210;
+  if (formData.guestsCount === 3) pricePerNight = 290;
+  if (formData.guestsCount >= 4) pricePerNight = 290; // fallback
   
   if (formData.source === 'AIRBNB') {
     pricePerNight = formData.customPricePerNight || 0;

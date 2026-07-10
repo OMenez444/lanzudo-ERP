@@ -6,36 +6,36 @@
   --font-serif: "Bodoni Moda", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Luxury Gold & Slate PMS Theme */
-  --color-brand-bg: #fdfbf7;         /* Soft warm champagne linen background */
-  --color-brand-gold: #b89047;       /* Refined luxury bronze/champagne gold */
-  --color-brand-cream: #1e252b;      /* Elegant dark slate for typography */
-  --color-brand-slate: #ffffff;      /* Pristine white cards */
-  --color-brand-blue: #3a506b;       /* Muted slate blue */
+  /* Luxury Gold & Slate PMS Theme - Escuro & Dourado Prime */
+  --color-brand-bg: #080c16;         /* Deep luxury midnight blue background */
+  --color-brand-gold: #dfb15b;       /* Refined luxury bronze/champagne gold */
+  --color-brand-cream: #faf6ee;      /* Elegant cream for readable typography */
+  --color-brand-slate: #121a2e;      /* Elegant dark navy for cards */
+  --color-brand-blue: #2a3a5c;       /* Muted slate blue */
   --color-brand-green: #2e5b44;      /* Elegant muted sage/forest green */
 
   /* Gold/Yellow color shades mapped to luxury bronze/gold shades */
   --color-gold-50: #faf6ee;
   --color-gold-100: #f4edd9;
   --color-gold-200: #e8dbb5;
-  --color-[#fccf14]: #b89047;
+  --color-[#fccf14]: #dfb15b;
   --color-gold-300: #dbca91;
   --color-gold-400: #c2ac69;
-  --color-gold-500: #a78e4d;
-  --color-gold-600: #8c7339;
-  --color-gold-700: #705827;
-  --color-gold-800: #554019;
-  --color-gold-900: #3c2a0e;
+  --color-gold-500: #dfb15b;
+  --color-gold-600: #c59b27;
+  --color-gold-700: #a37c1d;
+  --color-gold-800: #826012;
+  --color-gold-900: #5c4309;
 }
 
 @layer base {
   body {
-    @apply bg-brand-bg text-slate-800 antialiased;
+    @apply bg-brand-bg text-slate-200 antialiased;
     background-image: 
       /* Subtle luxury warm golds and slates */
-      radial-gradient(circle at 90% 90%, rgba(184, 144, 71, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 10% 10%, rgba(58, 80, 107, 0.05) 0%, transparent 60%),
-      linear-gradient(135deg, #fdfbf7 0%, #f5f2e9 100%);
+      radial-gradient(circle at 90% 90%, rgba(223, 177, 91, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 10% 10%, rgba(30, 58, 138, 0.15) 0%, transparent 60%),
+      linear-gradient(135deg, #080c16 0%, #0d1527 100%);
     background-attachment: fixed;
     position: relative;
   }
@@ -50,14 +50,14 @@
     font-size: 10px;
     font-weight: 900;
     letter-spacing: 0.3em;
-    color: rgba(184, 144, 71, 0.35);
-    background-color: rgba(184, 144, 71, 0.08);
-    border: 1px solid rgba(184, 144, 71, 0.15);
+    color: rgba(223, 177, 91, 0.35);
+    background-color: rgba(223, 177, 91, 0.08);
+    border: 1px solid rgba(223, 177, 91, 0.2);
     padding: 6px 14px;
     border-radius: 9999px;
     pointer-events: none;
     z-index: 10;
-    box-shadow: 0 4px 12px rgba(184, 144, 71, 0.03);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(4px);
     transition: all 0.3s ease;
   }
@@ -74,81 +74,109 @@
     z-index: -2;
   }
 
-  /* Make sure typical dark elements look brilliant in light theme */
+  /* Make sure typical dark elements look brilliant in dark theme */
   .text-slate-500 {
-    color: #4a545e !important;
+    color: #8a99ad !important;
   }
   .text-slate-400 {
-    color: #373f47 !important;
+    color: #a9b6cb !important;
   }
   .text-slate-300 {
-    color: #242a30 !important;
+    color: #cbd5e1 !important;
   }
   .text-slate-200 {
-    color: #1e252b !important; /* Brand cream */
+    color: #eaeef6 !important;
   }
   .text-slate-100 {
-    color: #12161a !important;
+    color: #ffffff !important;
+  }
+  .text-slate-600 {
+    color: #707e94 !important;
   }
 
   @theme {
-    --color-brand-gold: #b89047;
+    --color-brand-gold: #dfb15b;
   }
 
   /* Make sure brand-slate cards look incredibly themed with gold border & shadows */
   .bg-brand-slate {
-    background: linear-gradient(135deg, #ffffff 0%, #faf8f5 60%, #fbfaf7 100%) !important;
-    border: 1.5px solid rgba(184, 144, 71, 0.15) !important;
+    background: linear-gradient(135deg, #121a2e 0%, #0f172a 60%, #0c1222 100%) !important;
+    border: 1.5px solid rgba(223, 177, 91, 0.2) !important;
     box-shadow: 
-      0 12px 30px -4px rgba(184, 144, 71, 0.04), 
-      0 6px 16px -2px rgba(184, 144, 71, 0.06) !important;
+      0 12px 35px -4px rgba(0, 0, 0, 0.5), 
+      0 6px 16px -2px rgba(0, 0, 0, 0.3) !important;
   }
 
   /* High contrast action items */
   .bg-brand-gold {
-    background-color: #b89047 !important;
-    color: #ffffff !important;
+    background-color: #dfb15b !important;
+    color: #080c16 !important;
     font-weight: 800 !important;
-    border: 1px solid rgba(184, 144, 71, 0.2) !important;
-    box-shadow: 0 4px 12px rgba(184, 144, 71, 0.25) !important;
+    border: 1px solid rgba(223, 177, 91, 0.4) !important;
+    box-shadow: 0 4px 12px rgba(223, 177, 91, 0.25) !important;
   }
   .bg-brand-gold:hover {
-    background-color: #a37c38 !important;
+    background-color: #f3c673 !important;
     transform: translateY(-1px);
   }
 
-  /* Adjust borders designed for dark theme to map cleanly in light mode */
+  /* Adjust borders designed for dark theme to map cleanly */
   .border-white\/5 {
-    border-color: rgba(184, 144, 71, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
   }
   .border-white\/10 {
-    border-color: rgba(184, 144, 71, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
   }
   .bg-white\/5 {
-    background-color: rgba(184, 144, 71, 0.02) !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
   }
   .bg-white\/10 {
-    background-color: rgba(184, 144, 71, 0.05) !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
   }
   .bg-[#1a1a1f] {
-    background-color: #ffffff !important;
-    border: 1px solid rgba(184, 144, 71, 0.1) !important;
+    background-color: #121a2e !important;
+    border: 1px solid rgba(223, 177, 91, 0.2) !important;
   }
   .bg-[#121214] {
-    background-color: #ffffff !important;
-    border: 1px solid rgba(184, 144, 71, 0.1) !important;
+    background-color: #0d1527 !important;
+    border: 1px solid rgba(223, 177, 91, 0.15) !important;
   }
   .text-brand-gold {
-    color: #b89047 !important;
+    color: #dfb15b !important;
   }
 
   /* Form controls text and placeholders readability */
   input, textarea, select {
-    color: #1e252b !important;
-    background-color: #ffffff !important;
-    border-color: rgba(184, 144, 71, 0.2) !important;
+    color: #ffffff !important;
+    background-color: #0d1527 !important;
+    border: 1.5px solid rgba(223, 177, 91, 0.25) !important;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: #dfb15b !important;
+    box-shadow: 0 0 0 2px rgba(223, 177, 91, 0.2) !important;
+    outline: none !important;
   }
   input::placeholder, textarea::placeholder {
-    color: #7d8792 !important;
+    color: #94a3b8 !important;
+  }
+  select option {
+    background-color: #121a2e !important;
+    color: #ffffff !important;
+  }
+
+  /* Custom luxury gold scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #080c16;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(223, 177, 91, 0.25);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(223, 177, 91, 0.5);
   }
 }

@@ -646,10 +646,10 @@ export default function App() {
       // Se a diária estava zerada ou muito baixa (ex: repasse do Airbnb não lançado),
       // cobramos o valor padrão na extensão feita direto no balcão.
       if (extraPricePerNight === 0) {
-        extraPricePerNight = 139;
-        if (booking.guestsCount === 2) extraPricePerNight = 199.99;
-        if (booking.guestsCount === 3) extraPricePerNight = 279;
-        if (booking.guestsCount >= 4) extraPricePerNight = 279;
+        extraPricePerNight = 150;
+        if (booking.guestsCount === 2) extraPricePerNight = 210;
+        if (booking.guestsCount === 3) extraPricePerNight = 290;
+        if (booking.guestsCount >= 4) extraPricePerNight = 290;
       }
       
       const addedAmount = extraPricePerNight * extraNights;
@@ -974,11 +974,11 @@ export default function App() {
     customPricePerNight?: number;
   }) => {
     try {
-      // Pricing rules: 1=139, 2=199.99, 3=279
-      let pricePerNight = 139;
-      if (data.guestsCount === 2) pricePerNight = 199.99;
-      if (data.guestsCount === 3) pricePerNight = 279;
-      if (data.guestsCount >= 4) pricePerNight = 279; // fallback
+      // Pricing rules: 1=150, 2=210, 3=290
+      let pricePerNight = 150;
+      if (data.guestsCount === 2) pricePerNight = 210;
+      if (data.guestsCount === 3) pricePerNight = 290;
+      if (data.guestsCount >= 4) pricePerNight = 290; // fallback
 
       // Airbnb is already paid, custom price per night represents the Platform payout (optional)
       if (data.source === 'AIRBNB') {
