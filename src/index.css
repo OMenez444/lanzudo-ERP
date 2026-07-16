@@ -165,8 +165,11 @@
     color: #94a3b8 !important;
   }
   select option {
-    background-color: #121a2e !important;
-    color: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #121a2e !important;
+  }
+  select option:disabled {
+    color: #94a3b8 !important;
   }
 
   /* Custom luxury gold scrollbar */
