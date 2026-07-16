@@ -29,6 +29,10 @@
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-brand-bg text-slate-200 antialiased;
     background-image: 
@@ -133,11 +137,11 @@
   .bg-white\/10 {
     background-color: rgba(255, 255, 255, 0.08) !important;
   }
-  .bg-[#1a1a1f] {
+  .bg-\[\#1a1a1f\] {
     background-color: #121a2e !important;
     border: 1px solid rgba(223, 177, 91, 0.2) !important;
   }
-  .bg-[#121214] {
+  .bg-\[\#121214\] {
     background-color: #0d1527 !important;
     border: 1px solid rgba(223, 177, 91, 0.15) !important;
   }
@@ -150,6 +154,7 @@
     color: #ffffff !important;
     background-color: #0d1527 !important;
     border: 1.5px solid rgba(223, 177, 91, 0.25) !important;
+    color-scheme: dark;
   }
   input:focus, textarea:focus, select:focus {
     border-color: #dfb15b !important;
